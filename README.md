@@ -1,18 +1,14 @@
-![Build Status](https://github.com/github.com/ygrebnov/testutils/workflows/CI/badge.svg)
-
 `testutils` is a collection of utility functions to be used in testing Go code. 
 
 Author: Yaroslav Grebnov
 
-Functionality:
-    * [Working with Docker objects](#docker-package)
-
 Get started:
-    * `testutils` can be [installed using `go get` command](#installation)
+
+* `testutils` can be [installed using `go get` command](#installation)
 
 
-[`docker`] package
-------------------
+`docker` package
+----------------
 
 `docker` package provides utility functions to work with Docker objects in Go code tests. 
 
@@ -107,10 +103,9 @@ func Test_SomeFunction(t *testing.T) {
 }
 ```
 
-------
 
 Installation
-============
+------------
 
 To install `testutils`, use `go get` command:
 
@@ -120,23 +115,20 @@ go get github.com/github.com/ygrebnov/testutils
 
 This will make the `github.com/github.com/ygrebnov/testutils/docker` package available for you.
 
-------
 
 Staying up to date
-==================
+------------------
 
 To update Testify to the latest version, use `go get -u github.com/github.com/ygrebnov/testutils`.
 
-------
 
-Supported go versions
-==================
+Supported Go versions
+---------------------
 
 We currently support the latest major Go versions from 1.16 onwards.
 
-------
 
 License
-=======
+-------
 
 This project is licensed under the terms of the MIT license.
