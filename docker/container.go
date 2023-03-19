@@ -24,6 +24,7 @@ type container struct {
 	name   string
 	image  string
 	env    []string
+	ports  []string
 	state  string
 	status string
 }
@@ -40,7 +41,7 @@ func (c *container) Create(ctx context.Context) error {
 	if err = c.validate(ctx); err != nil {
 		return err
 	}
-	c.id, err = CreateContainer(ctx, c.image, c.name, c.env)
+	c.id, err = CreateContainer(ctx, c.image, c.name, c.env, c.ports)
 	return err
 }
 
@@ -67,7 +68,7 @@ func (c *container) CreateStart(ctx context.Context) error {
 	if err = PullImage(ctx, c.image); err != nil {
 		return err
 	}
-	c.id, err = CreateStartContainer(ctx, c.image, c.name, c.env)
+	c.id, err = CreateStartContainer(ctx, c.image, c.name, c.env, c.ports)
 	return err
 }
 
@@ -127,6 +128,6 @@ func (c *container) validate(ctx context.Context) error {
 }
 
 // NewContainer creates a new container object.
-func NewContainer(name string, image string, env []string) Container {
-	return &container{name: name, image: image, env: env}
+func NewContainer(name string, image string, env []string, ports []string) Container {
+	return &container{name: name, image: image, env: env, ports: ports}
 }

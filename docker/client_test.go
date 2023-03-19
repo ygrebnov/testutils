@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -38,7 +37,7 @@ func Test_NewClient(t *testing.T) {
 			if test.setupMocks != nil {
 				test.setupMocks()
 			}
-			c, err := getClient(context.Background())
+			c, err := getClient()
 			require.ErrorIs(t, err, test.expectedError)
 			require.Equal(t, test.expectedCli, c)
 		})

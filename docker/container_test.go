@@ -221,7 +221,7 @@ func Test_container(t *testing.T) {
 			if test.setupMocks != nil {
 				test.setupMocks()
 			}
-			c := NewContainer(test.containerData.name, test.containerData.image, nil)
+			c := NewContainer(test.containerData.name, test.containerData.image, nil, nil)
 			require.ErrorIs(t, test.function(c, context.Background()), test.expectedError)
 			if test.expectedError == nil {
 				require.Equal(t, test.containerData.asContainer(), c)
