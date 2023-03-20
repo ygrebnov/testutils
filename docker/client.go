@@ -1,7 +1,10 @@
+// Package docker is a collection of utilities to operate Docker objects in Go code tests
+// in a simplified manner.
 package docker
 
 import (
 	"context"
+	"strings"
 
 	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
@@ -32,6 +35,7 @@ var (
 	// cli points to a client
 	cli client
 	err error
+	ok  bool
 	// newClientFn is used to simplify testability of newClient function.
 	newClientFn func(ops ...dockerClient.Opt) (*dockerClient.Client, error) = dockerClient.NewClientWithOpts
 )
@@ -77,15 +81,25 @@ func (c *defaultClient) pullImage(ctx context.Context, name string) error {
 // createContainer attempts to pull image and then calls Docker client ContainerCreate method.
 // Returns created container id.
 func (c *defaultClient) createContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error) {
-	portsMap := make(nat.PortSet, len(ports))
+	var hostPortString, containerPortString string
+	exposedPorts := make(nat.PortSet, len(ports))
+	portBindings := make(nat.PortMap, len(ports))
 	for _, port := range ports {
-		portsMap[nat.Port(port)] = struct{}{}
+		if hostPortString, containerPortString, ok = strings.Cut(port, ":"); !ok {
+			return "", errIncorrectPortConfig
+		}
+		containerPort := nat.Port(containerPortString + "/tcp")
+		exposedPorts[containerPort] = struct{}{}
+		portBindings[containerPort] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: hostPortString}}
 	}
 	if err := c.pullImage(ctx, image); err != nil {
 		return "", err
 	}
 	resp, err := c.handler.ContainerCreate(
-		ctx, &dockerContainer.Config{Image: image, Env: env, ExposedPorts: portsMap}, nil, nil, nil, name,
+		ctx,
+		&dockerContainer.Config{Image: image, Env: env, ExposedPorts: exposedPorts},
+		&dockerContainer.HostConfig{PortBindings: portBindings},
+		nil, nil, name,
 	)
 	if err != nil {
 		return "", err

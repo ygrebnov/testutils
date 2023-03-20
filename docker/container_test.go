@@ -187,9 +187,6 @@ func Test_container(t *testing.T) {
 		{"createStart_empty_image_name", nil, mockedEmptyImageContainer, Container.CreateStart, errEmptyImageName},
 		{"createStart_invalid_image", func() { mockedImagePullError = errInvalidImagePullMock }, mockedInvalidImageContainer, Container.CreateStart, errInvalidImagePullMock},
 
-		{"fetchData", nil, mockedRunningContainer, Container.fetchData, nil},
-		{"fetchData_technical_error", func() { mockedContainerListError = errContainerListTechnicalMock }, mockedCreatedContainer, Container.fetchData, errContainerListTechnicalMock},
-
 		{"stop", nil, mockedRunningContainer, Container.Stop, nil},
 		{"stop_empty_container_name", nil, mockedEmptyNameContainer, Container.Stop, errEmptyContainerName},
 		{"stop_container_notfound", func() { mockedContainerList = mockedEmptyContainerList }, mockedCreatedContainer, Container.Stop, errContainerNotFound},
@@ -221,7 +218,7 @@ func Test_container(t *testing.T) {
 			if test.setupMocks != nil {
 				test.setupMocks()
 			}
-			c := NewContainer(test.containerData.name, test.containerData.image, nil, nil)
+			c := NewContainerBuilder(test.containerData.name, test.containerData.image).Build()
 			require.ErrorIs(t, test.function(c, context.Background()), test.expectedError)
 			if test.expectedError == nil {
 				require.Equal(t, test.containerData.asContainer(), c)

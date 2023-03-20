@@ -11,11 +11,9 @@ type Container interface {
 	Create(ctx context.Context) error
 	Start(ctx context.Context) error
 	CreateStart(ctx context.Context) error
-	fetchData(ctx context.Context) error
 	Stop(ctx context.Context) error
 	Remove(ctx context.Context) error
 	StopRemove(ctx context.Context) error
-	validate(ctx context.Context) error
 }
 
 // container holds container data. Implements Container interface.
@@ -30,9 +28,10 @@ type container struct {
 }
 
 var (
-	errEmptyContainerName = errors.New("empty container name")
-	errEmptyImageName     = errors.New("empty image name")
-	errContainerNotFound  = errors.New("container not found")
+	errEmptyContainerName  = errors.New("empty container name")
+	errEmptyImageName      = errors.New("empty image name")
+	errContainerNotFound   = errors.New("container not found")
+	errIncorrectPortConfig = errors.New(`incorrect port configuration, expected format is: "containerPort:hostPort"`)
 )
 
 // Create attempts to create a Docker container on the host.
@@ -116,7 +115,7 @@ func (c *container) StopRemove(ctx context.Context) error {
 	return err
 }
 
-// validate checks if container object has non-empty name and image name field values.
+// validate checks if [Container] object has non-empty `name` and `image` field values.
 func (c *container) validate(ctx context.Context) error {
 	if len(c.name) == 0 {
 		return errEmptyContainerName
@@ -127,7 +126,68 @@ func (c *container) validate(ctx context.Context) error {
 	return nil
 }
 
-// NewContainer creates a new container object.
-func NewContainer(name string, image string, env []string, ports []string) Container {
-	return &container{name: name, image: image, env: env, ports: ports}
+// ContainerBuilder defines methods to set [Container] object optional attributes values.
+type ContainerBuilder interface {
+	// SetEnv defines a list of environment variables to be created inside a container.
+	//
+	// Example:
+	//
+	//	c := NewContainerBuilder("containerName", "imageName").
+	//		SetEnv([]string{"MY_VAR=myvarvalue"}).
+	//		Build()
+	//	if err := c.Create(context.Context.Background()); err != nil {
+	//		panic(err)
+	//	}
+	SetEnv(env []string) ContainerBuilder
+	// ExposePorts defines a list of container ports to be exposed.
+	// List elements must have format: "hostPort:containerPort".
+	//
+	// Example:
+	//
+	//	c := NewContainerBuilder("containerName", "imageName").ExposePorts([]string{"8080:80"}).Build()
+	//	if err := c.Create(context.Context.Background()); err != nil {
+	//		panic(err)
+	//	}
+	ExposePorts(ports []string) ContainerBuilder
+	// Build creates a new [Container] object after setting container's required and optional attributes values.
+	Build() Container
+}
+
+// containerBuilder holds attributes values for a new container being built. Implements [ContainerBuilder] interface.
+type containerBuilder struct {
+	name, image string
+	env, ports  []string
+}
+
+// SetEnv sets [ContainerBuilder] optional `env` attribute value.
+func (cb *containerBuilder) SetEnv(env []string) ContainerBuilder {
+	cb.env = env
+	return cb
+}
+
+// ExposePorts sets [ContainerBuilder] optional `ports` attribute value.
+func (cb *containerBuilder) ExposePorts(ports []string) ContainerBuilder {
+	cb.ports = ports
+	return cb
+}
+
+// Build creates a new [Container] object from [ContainerBuilder] one.
+func (cb *containerBuilder) Build() Container {
+	return &container{name: cb.name, image: cb.image, env: cb.env, ports: cb.ports}
+}
+
+// NewContainerBuilder creates a new [ContainerBuilder] object. This object is then used to set optional
+// container attributes values and finally create a new [Container] object.
+//
+// Example:
+//
+//	c := NewContainerBuilder("containerName", "imageName").
+//		SetEnv([]string{"MY_VAR=myvarvalue"}).
+//		ExposePorts([]string{"8080:80"}).
+//		Build()
+//	if err := c.Create(context.Context.Background()); err != nil {
+//		panic(err)
+//	}
+func NewContainerBuilder(name string, image string) ContainerBuilder {
+	return &containerBuilder{name: name, image: image}
 }
