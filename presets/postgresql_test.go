@@ -11,7 +11,8 @@ import (
 func Test_PostgresqlPreset(t *testing.T) {
 	expectedContainerBuilder := docker.NewContainerBuilder("postgresqlPresetContainer", "postgres").
 		SetEnv([]string{"POSTGRES_USER=postgres", "POSTGRES_PASSWORD=postgresqlPresetPassword", "PGPORT=5432"}).
-		ExposePorts([]string{"5432:5432"})
+		ExposePorts([]string{"5432:5432"}).
+		Healthcheck("pg_isready")
 	expectedContainer := expectedContainerBuilder.Build()
 
 	require.Equal(t, expectedContainerBuilder, NewPostgresqlContainerBuilder())

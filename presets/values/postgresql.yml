@@ -12,5 +12,6 @@ container:
       value: 5432
   ports:
     - "5432:5432"
+  healthcheck: "pg_isready"
 image:
   name: "postgres"

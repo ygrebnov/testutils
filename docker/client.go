@@ -4,7 +4,9 @@ package docker
 
 import (
 	"context"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
@@ -16,9 +18,9 @@ import (
 // client defines client methods.
 type client interface {
 	pullImage(ctx context.Context, name string) error
-	createContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error)
+	createContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error)
 	startContainer(ctx context.Context, id string) error
-	createStartContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error)
+	createStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error)
 	fetchContainerData(ctx context.Context, container *container) error
 	stopContainer(ctx context.Context, id string) error
 	removeContainer(ctx context.Context, id string) error
@@ -72,19 +74,25 @@ func (c *defaultClient) close() {
 
 // pullImage calls Docker client ImagePull method. Ignores method execution output.
 func (c *defaultClient) pullImage(ctx context.Context, name string) error {
-	if _, err := c.handler.ImagePull(ctx, name, types.ImagePullOptions{}); err != nil {
+	var reader io.ReadCloser
+	if reader, err = c.handler.ImagePull(ctx, name, types.ImagePullOptions{}); err != nil {
 		return err
 	}
+	defer reader.Close()
+	io.ReadAll(reader) // nolint: errcheck
 	return nil
 }
 
 // createContainer attempts to pull image and then calls Docker client ContainerCreate method.
 // Returns created container id.
-func (c *defaultClient) createContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error) {
-	var hostPortString, containerPortString string
-	exposedPorts := make(nat.PortSet, len(ports))
-	portBindings := make(nat.PortMap, len(ports))
-	for _, port := range ports {
+func (c *defaultClient) createContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
+	var (
+		hostPortString, containerPortString string
+		healthcheck                         dockerContainer.HealthConfig
+	)
+	exposedPorts := make(nat.PortSet, len(options.ExposedPorts))
+	portBindings := make(nat.PortMap, len(options.ExposedPorts))
+	for _, port := range options.ExposedPorts {
 		if hostPortString, containerPortString, ok = strings.Cut(port, ":"); !ok {
 			return "", errIncorrectPortConfig
 		}
@@ -92,12 +100,24 @@ func (c *defaultClient) createContainer(ctx context.Context, image string, name 
 		exposedPorts[containerPort] = struct{}{}
 		portBindings[containerPort] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: hostPortString}}
 	}
+	if len(options.Healthcheck) > 0 {
+		healthcheck.Test = strings.Split("CMD-SHELL "+options.Healthcheck, " ")
+		healthcheck.Retries = 29
+		healthcheck.StartPeriod = time.Second * 2
+		healthcheck.Interval = time.Second * 2
+		healthcheck.Timeout = time.Second * 10
+	}
 	if err := c.pullImage(ctx, image); err != nil {
 		return "", err
 	}
 	resp, err := c.handler.ContainerCreate(
 		ctx,
-		&dockerContainer.Config{Image: image, Env: env, ExposedPorts: exposedPorts},
+		&dockerContainer.Config{
+			Image:        image,
+			Env:          options.EnvironmentVariables,
+			ExposedPorts: exposedPorts,
+			Healthcheck:  &healthcheck,
+		},
 		&dockerContainer.HostConfig{PortBindings: portBindings},
 		nil, nil, name,
 	)
@@ -115,8 +135,8 @@ func (c *defaultClient) startContainer(ctx context.Context, id string) error {
 
 // createStartContainer attempts to create and to start a container.
 // Returns created container id.
-func (c *defaultClient) createStartContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error) {
-	id, err := c.createContainer(ctx, image, name, env, ports)
+func (c *defaultClient) createStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
+	id, err := c.createContainer(ctx, image, name, options)
 	if err != nil {
 		return "", err
 	}
@@ -131,8 +151,8 @@ func (c *defaultClient) fetchContainerData(ctx context.Context, container *conta
 		return errEmptyContainerName
 	}
 	filters := dockerContainerFilters.NewArgs()
-	filters.Add("name", container.name)
-	containers, err := c.handler.ContainerList(ctx, types.ContainerListOptions{Filters: filters})
+	filters.Add("name", "/"+container.name)
+	containers, err := c.handler.ContainerList(ctx, types.ContainerListOptions{All: true, Filters: filters})
 	switch {
 	case err != nil:
 		return err
@@ -175,13 +195,13 @@ func PullImage(ctx context.Context, name string) error {
 
 // CreateContainer attempts to create a new container.
 // Returns created container id.
-func CreateContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error) {
+func CreateContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
 	c, err := getClient()
 	if err != nil {
 		return "", err
 	}
 	defer c.close()
-	return c.createContainer(ctx, image, name, env, ports)
+	return c.createContainer(ctx, image, name, options)
 }
 
 // StartContainer attempts to start container.
@@ -196,13 +216,13 @@ func StartContainer(ctx context.Context, id string) error {
 
 // CreateStartContainer attempts to create and start a new container.
 // Returns created container id.
-func CreateStartContainer(ctx context.Context, image string, name string, env []string, ports []string) (string, error) {
+func CreateStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
 	c, err := getClient()
 	if err != nil {
 		return "", err
 	}
 	defer c.close()
-	return c.createStartContainer(ctx, image, name, env, ports)
+	return c.createStartContainer(ctx, image, name, options)
 }
 
 // fetchContainerData attempts to fetch Docker container data.
