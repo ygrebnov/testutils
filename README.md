@@ -45,9 +45,11 @@ import (
 
 func Test_SomeFunction(t *testing.T) {
     ctx := context.Background()
-	env := []string{"MYVAR=my-var-value"}
-	ports := []string{"8080:80"}
-    containerID, err := docker.CreateStartContainer(ctx, "image/name", "test-container", env, ports)
+	options := docker.ContainerOptions{
+		EnvironmentVariables: []string{"MYVAR=my-var-value"}, 
+		ExposedPorts: []string{"8080:80"},
+	}
+    containerID, err := docker.CreateStartContainer(ctx, "image/name", "test-container", options)
     require.NoError(t, err)
     defer func() { require.NoError(t, docker.StopRemoveContainer(ctx, containerID)) }()
 
@@ -72,7 +74,7 @@ In the example above, a few lines of code allow to:
 `Container` object exposed methods:
 
 * `Create` - using the object attributes, pulls a Docker image, creates a new Docker container and environment variables inside the container,
-* `Start` - fetches the corresponding Docker container data and saves it as object attributes values, starts the container,
+* `Start` - fetches the corresponding Docker container data and saves it as object attributes values, starts the container and waits until it starts,
 * `CreateStart` - performs all the `Create` actions and starts the created container,
 * `Stop` - fetches the corresponding Docker container data and saves it as object attributes values, stops the container,
 * `Remove` - fetches the corresponding Docker container data and saves it as object attributes values, removes the container if it exists,
@@ -100,6 +102,7 @@ func Test_SomeFunction(t *testing.T) {
 	testContainer := docker.NewContainerBuilder("test-container", "image/name").
 		SetEnv([]string{"MYVAR=my-var-value"}).
 		ExposePorts([]string{"8080:80"}).
+		Healthcheck("is_service_running").
 		Build()
 	require.NoError(t, testContainer.StopRemove(ctx))  // stops and removes "test-container" Docker container if it exists on host
 	require.NoError(t, testContainer.CreateStart(ctx)) // creates and starts a new "test-container" Docker container on host

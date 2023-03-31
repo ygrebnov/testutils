@@ -55,7 +55,7 @@ func (mdc *mockedDockerClient) ContainerList(
 	ctx context.Context,
 	options types.ContainerListOptions,
 ) ([]types.Container, error) {
-	return mockedContainerList, mockedContainerListError
+	return mockedContainerListValues.next()
 }
 
 // ContainerStop is a mocked 'dockerClient.Client' type method.
@@ -81,12 +81,41 @@ func (mdc *mockedDockerClient) Close() error {
 	return nil
 }
 
+// containerListMockValue contains a pair of mocked `dockerClient.Client.ContainerList` method return values
+type containerListMockValue struct {
+	mockContainers []types.Container
+	mockError      error
+}
+
+// containerListMockValues contains a slice of mocked `dockerClient.Client.ContainerList` method return values.
+// containerListMockValues is capable of iteratively returning values from the list.
+type containerListMockValues struct {
+	values []containerListMockValue
+	size   int
+	index  int
+}
+
+// next iteratively returns containerListMockValues values to caller.
+func (cl *containerListMockValues) next() ([]types.Container, error) {
+	if cl.size == 1 {
+		return cl.values[0].mockContainers, cl.values[0].mockError
+	}
+	value := cl.values[cl.index]
+	cl.index++
+	return value.mockContainers, value.mockError
+}
+
+func newContainerListMockValues(values ...containerListMockValue) containerListMockValues {
+	return containerListMockValues{values: values, size: len(values), index: 0}
+}
+
 // resetMocks resets mocks to their default state.
 func resetMocks() {
 	mockedImagePullError = nil
 	mockedContainerCreateError = nil
-	mockedContainerListError = nil
-	mockedContainerList = []types.Container{mockedRunningContainer.asTypesContainer()}
+	mockedContainerListValues = newContainerListMockValues(
+		containerListMockValue{mockedRunningInContainerList, nil},
+	)
 }
 
 // mockedContainer holds a mocked container data. It is used to store data in one object and
@@ -106,16 +135,23 @@ func (mc *mockedContainer) asTypesContainer() types.Container {
 
 // asContainer converts mocked container into an object of internal 'container' type.
 func (mc *mockedContainer) asContainer() *container {
-	return &container{id: mc.id, name: mc.name, image: mc.image, state: mc.state, status: mc.status}
+	return &container{
+		id:      mc.id,
+		name:    mc.name,
+		image:   mc.image,
+		state:   mc.state,
+		status:  mc.status,
+		options: ContainerOptions{StartTimeout: 60},
+	}
 }
 
 var (
-	mockedContainerID                                                          = "mockedContainerID"
-	mockedContainerName                                                        = "mockedContainerName"
-	mockedImageName                                                            = "mockedImageName"
-	mockedImagePullError, mockedContainerCreateError, mockedContainerListError error
-	mockedContainerList                                                        []types.Container
-	mockedCreatedContainer                                                     = mockedContainer{
+	mockedContainerID                                = "mockedContainerID"
+	mockedContainerName                              = "mockedContainerName"
+	mockedImageName                                  = "mockedImageName"
+	mockedImagePullError, mockedContainerCreateError error
+	mockedContainerListValues                        containerListMockValues
+	mockedCreatedContainer                           = mockedContainer{
 		id:    mockedContainerID,
 		name:  mockedContainerName,
 		image: mockedImageName,
@@ -150,8 +186,19 @@ var (
 	errDuplicateContainerNameMock = errors.New("mockedDuplicateContainerNameError")
 	errContainerListTechnicalMock = errors.New("mockedContainerListTechnicalError")
 
-	mockedEmptyContainerList     = []types.Container{}
-	mockedCreatedInContainerList = []types.Container{mockedCreatedContainer.asTypesContainer()}
+	mockedEmptyContainerList                = []types.Container{}
+	mockedCreatedInContainerList            = []types.Container{mockedCreatedContainer.asTypesContainer()}
+	mockedRunningInContainerList            = []types.Container{mockedRunningContainer.asTypesContainer()}
+	mockedContainerListValuesCreatedRunning = newContainerListMockValues(
+		containerListMockValue{mockedCreatedInContainerList, nil},
+		containerListMockValue{mockedRunningInContainerList, nil},
+	)
+	mockedContainerListValuesEmpty = newContainerListMockValues(
+		containerListMockValue{mockedEmptyContainerList, nil},
+	)
+	mockedContainerListValuesEmptyTechnical = newContainerListMockValues(
+		containerListMockValue{mockedEmptyContainerList, errContainerListTechnicalMock},
+	)
 )
 
 func Test_container(t *testing.T) {
@@ -172,16 +219,19 @@ func Test_container(t *testing.T) {
 		{"create_empty_image_name", nil, mockedEmptyImageContainer, Container.Create, errEmptyImageName},
 		{"create_invalid_image", func() { mockedImagePullError = errContainerListTechnicalMock }, mockedInvalidImageContainer, Container.Create, errContainerListTechnicalMock},
 
-		{"start_created_container", func() { mockedContainerList = mockedCreatedInContainerList }, mockedCreatedContainer, Container.Start, nil},
+		{"start_created_container", func() {
+			mockedContainerListValues = mockedContainerListValuesCreatedRunning
+		}, mockedRunningContainer, Container.Start, nil},
 		{"start_already_running_container", nil, mockedRunningContainer, Container.Start, nil},
 		{"start_empty_container_name", nil, mockedEmptyNameContainer, Container.Start, errEmptyContainerName},
-		{"start_container_notfound", func() { mockedContainerList = mockedEmptyContainerList }, mockedCreatedContainer, Container.Start, errContainerNotFound},
+		{"start_container_notfound", func() {
+			mockedContainerListValues = mockedContainerListValuesEmpty
+		}, mockedCreatedContainer, Container.Start, errContainerNotFound},
 		{"start_container_data_fetch_error", func() {
-			mockedContainerList = mockedEmptyContainerList
-			mockedContainerListError = errContainerListTechnicalMock
+			mockedContainerListValues = mockedContainerListValuesEmptyTechnical
 		}, mockedCreatedContainer, Container.Start, errContainerListTechnicalMock},
 
-		{"createStart", nil, mockedCreatedContainer, Container.CreateStart, nil},
+		{"createStart", nil, mockedRunningContainer, Container.CreateStart, nil},
 		{"createStart_empty_container_name", nil, mockedEmptyNameContainer, Container.CreateStart, errEmptyContainerName},
 		{"createStart_duplicate_container_name", func() { mockedContainerCreateError = errDuplicateContainerNameMock }, mockedCreatedContainer, Container.CreateStart, errDuplicateContainerNameMock},
 		{"createStart_empty_image_name", nil, mockedEmptyImageContainer, Container.CreateStart, errEmptyImageName},
@@ -189,26 +239,29 @@ func Test_container(t *testing.T) {
 
 		{"stop", nil, mockedRunningContainer, Container.Stop, nil},
 		{"stop_empty_container_name", nil, mockedEmptyNameContainer, Container.Stop, errEmptyContainerName},
-		{"stop_container_notfound", func() { mockedContainerList = mockedEmptyContainerList }, mockedCreatedContainer, Container.Stop, errContainerNotFound},
+		{"stop_container_notfound", func() {
+			mockedContainerListValues = mockedContainerListValuesEmpty
+		}, mockedCreatedContainer, Container.Stop, errContainerNotFound},
 		{"stop_container_data_fetch_error", func() {
-			mockedContainerList = mockedEmptyContainerList
-			mockedContainerListError = errContainerListTechnicalMock
+			mockedContainerListValues = mockedContainerListValuesEmptyTechnical
 		}, mockedRunningContainer, Container.Stop, errContainerListTechnicalMock},
 
 		{"remove", nil, mockedRunningContainer, Container.Remove, nil},
 		{"remove_empty_container_name", nil, mockedEmptyNameContainer, Container.Remove, errEmptyContainerName},
-		{"remove_container_notfound", func() { mockedContainerList = mockedEmptyContainerList }, mockedNotFoundContainer, Container.Remove, nil},
+		{"remove_container_notfound", func() {
+			mockedContainerListValues = mockedContainerListValuesEmpty
+		}, mockedNotFoundContainer, Container.Remove, nil},
 		{"remove_container_data_fetch_error", func() {
-			mockedContainerList = mockedEmptyContainerList
-			mockedContainerListError = errContainerListTechnicalMock
+			mockedContainerListValues = mockedContainerListValuesEmptyTechnical
 		}, mockedRunningContainer, Container.Remove, errContainerListTechnicalMock},
 
 		{"stopRemove", nil, mockedRunningContainer, Container.StopRemove, nil},
 		{"stopRemove_empty_container_name", nil, mockedEmptyNameContainer, Container.StopRemove, errEmptyContainerName},
-		{"stopRemove_container_notfound", func() { mockedContainerList = mockedEmptyContainerList }, mockedNotFoundContainer, Container.StopRemove, nil},
+		{"stopRemove_container_notfound", func() {
+			mockedContainerListValues = mockedContainerListValuesEmpty
+		}, mockedNotFoundContainer, Container.StopRemove, nil},
 		{"stopRemove_container_data_fetch_error", func() {
-			mockedContainerList = mockedEmptyContainerList
-			mockedContainerListError = errContainerListTechnicalMock
+			mockedContainerListValues = mockedContainerListValuesEmptyTechnical
 		}, mockedRunningContainer, Container.StopRemove, errContainerListTechnicalMock},
 	}
 

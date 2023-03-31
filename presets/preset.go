@@ -25,9 +25,10 @@ type defaultPreset struct {
 }
 
 type presetContainer struct {
-	Name  string               `yaml:"name"`
-	Env   []presetContainerEnv `yaml:"env,omitempty"`
-	Ports []string             `yaml:"ports,omitempty"`
+	Name        string               `yaml:"name"`
+	Env         []presetContainerEnv `yaml:"env,omitempty"`
+	Ports       []string             `yaml:"ports,omitempty"`
+	Healthcheck string               `yaml:"healthcheck"`
 }
 
 type presetContainerEnv struct {
@@ -71,7 +72,10 @@ func (p *defaultPreset) asContainerBuilder() docker.ContainerBuilder {
 		env = append(env, fmt.Sprintf("%s=%s", el.Name, stringVal))
 	}
 
-	return docker.NewContainerBuilder(p.Container.Name, p.Image.Name).SetEnv(env).ExposePorts(p.Container.Ports)
+	return docker.NewContainerBuilder(p.Container.Name, p.Image.Name).
+		SetEnv(env).
+		ExposePorts(p.Container.Ports).
+		Healthcheck(p.Container.Healthcheck)
 }
 
 func (p *defaultPreset) asContainer() docker.Container {
