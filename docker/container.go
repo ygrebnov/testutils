@@ -27,55 +27,46 @@ type Container interface {
 
 // container holds container data. Implements Container interface.
 type container struct {
-	id      string
-	name    string
-	image   string
-	options ContainerOptions
-	state   string
-	status  string
+	id, image, state, status string
+	options                  Options
 }
 
-// ContainerOptions holds container optional attributes. [ContainerOptions] is used on creating new containers.
-type ContainerOptions struct {
+// Options holds container optional attributes values which can be set on new container object creation.
+type Options struct {
+	Name, Healthcheck                  string
 	EnvironmentVariables, ExposedPorts []string
-	Healthcheck                        string
 	StartTimeout                       int
 }
 
 var (
-	errEmptyContainerName    = errors.New("empty container name")
-	errEmptyImageName        = errors.New("empty image name")
-	errContainerNotFound     = errors.New("container not found")
-	errContainerStartTimeout = errors.New("container start timeout")
-	errIncorrectPortConfig   = errors.New(`incorrect port configuration, expected format is: "containerPort:hostPort"`)
+	errEmptyContainerNameAndID = errors.New("empty container name and id")
+	errEmptyImageName          = errors.New("empty image name")
+	errContainerNotFound       = errors.New("container not found")
+	errContainerStartTimeout   = errors.New("container start timeout")
+	errIncorrectPortConfig     = errors.New(`incorrect port configuration, expected format is: "containerPort:hostPort"`)
 )
 
-// Create attempts to create a Docker container on the host.
-// Container object must have non-empty image and name fields values.
+// Create creates a new Docker container and saves its id to the container object.
 func (c *container) Create(ctx context.Context) error {
-	if err = c.validate(ctx); err != nil {
-		return err
-	}
 	if err = PullImage(ctx, c.image); err != nil {
 		return err
 	}
-	c.id, err = CreateContainer(ctx, c.image, c.name, c.options)
+	c.id, err = CreateContainer(ctx, c.image, &c.options)
 	return err
 }
 
-// Start attempts to start Docker container on the host.
-// Waits until container is in `running` state. In case a healthcheck is defined, also waits for service
-// inside the container to finish starting.
-// Container object must have non-empty name field value.
+// Start starts Docker container and waits until it is in `running` state. In case healthcheck is defined for the container,
+// also waits for service inside the container to finish starting.
 func (c *container) Start(ctx context.Context) error {
-	started, err := c.HasStarted(ctx)
+	var started bool
+	started, err = c.HasStarted(ctx)
 	if err != nil {
 		return err
 	} else if started {
 		return nil
 	}
 
-	if err := StartContainer(ctx, c.id); err != nil {
+	if err = StartContainer(ctx, c.id); err != nil {
 		return err
 	}
 
@@ -94,8 +85,7 @@ func (c *container) Start(ctx context.Context) error {
 	return nil
 }
 
-// CreateStart attempts to create and start a Docker container on the host.
-// Container object must have non-empty image and name fields values.
+// CreateStart creates a new Docker container and starts it.
 func (c *container) CreateStart(ctx context.Context) error {
 	if err = c.Create(ctx); err != nil {
 		return err
@@ -103,27 +93,25 @@ func (c *container) CreateStart(ctx context.Context) error {
 	return c.Start(ctx)
 }
 
-// fetchData attempts to fetch Docker container data and store it in the container object.
-// Container object must have non-empty name field value.
+// fetchData fetches Docker container data and stores it in the container object.
 func (c *container) fetchData(ctx context.Context) error {
-	if len(c.name) == 0 {
-		return errEmptyContainerName
-	}
 	return fetchContainerData(ctx, c)
 }
 
-// Stop attempts to stop Docker container on the host.
-// Container object must have non-empty name field value.
+// Stop stops Docker container.
 func (c *container) Stop(ctx context.Context) error {
-	if err = c.fetchData(ctx); err != nil {
-		return err
+	if len(c.id) == 0 {
+		if err = c.fetchData(ctx); err != nil {
+			return err
+		}
 	}
 	return StopContainer(ctx, c.id)
 }
 
-// Remove attempts to remove Docker container from the host.
-// Container object must have non-empty name field value.
+// Remove removes Docker container.
 func (c *container) Remove(ctx context.Context) error {
+	// fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
+	// In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
 	err = c.fetchData(ctx)
 	switch err {
 	case errContainerNotFound:
@@ -134,9 +122,10 @@ func (c *container) Remove(ctx context.Context) error {
 	return err
 }
 
-// StopRemove attempts to stop and remove Docker container from the host.
-// Container object must have non-empty name field value.
+// StopRemove stops Docker container and removes it.
 func (c *container) StopRemove(ctx context.Context) error {
+	// fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
+	// In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
 	err = c.fetchData(ctx)
 	switch err {
 	case errContainerNotFound:
@@ -149,6 +138,7 @@ func (c *container) StopRemove(ctx context.Context) error {
 
 // HasStarted returns container state and healthiness check status. Can be used to check whether both, a container
 // and a service inside it have started.
+// Container is considered as started if its state is 'running' and not 'health: starting'.
 func (c *container) HasStarted(ctx context.Context) (bool, error) {
 	if err = c.fetchData(ctx); err != nil {
 		return false, err
@@ -156,88 +146,15 @@ func (c *container) HasStarted(ctx context.Context) (bool, error) {
 	return c.state == containerStateRunning && !strings.Contains(c.status, "health: "+types.Starting), nil
 }
 
-// validate checks if [Container] object has non-empty `name` and `image` field values.
-func (c *container) validate(ctx context.Context) error {
-	if len(c.name) == 0 {
-		return errEmptyContainerName
+// NewContainer creates a new [Container] object.
+func NewContainer(image string) Container {
+	return NewContainerWithOptions(image, Options{})
+}
+
+// NewContainerWithOptions creates a new [Container] object with optional attributes values specified.
+func NewContainerWithOptions(image string, options Options) Container {
+	if options.StartTimeout == 0 {
+		options.StartTimeout = defaultContainerStartTimeout
 	}
-	if len(c.image) == 0 {
-		return errEmptyImageName
-	}
-	return nil
-}
-
-// ContainerBuilder defines methods to set [Container] object optional attributes values.
-type ContainerBuilder interface {
-	// SetEnv defines a list of environment variables to be created inside a container.
-	//
-	// Example:
-	//
-	//	c := NewContainerBuilder("containerName", "imageName").
-	//		SetEnv([]string{"MY_VAR=myvarvalue"}).
-	//		Build()
-	//	if err := c.Create(context.Context.Background()); err != nil {
-	//		panic(err)
-	//	}
-	SetEnv(env []string) ContainerBuilder
-	// ExposePorts defines a list of container ports to be exposed.
-	// List elements must have format: "hostPort:containerPort".
-	//
-	// Example:
-	//
-	//	c := NewContainerBuilder("containerName", "imageName").ExposePorts([]string{"8080:80"}).Build()
-	//	if err := c.Create(context.Context.Background()); err != nil {
-	//		panic(err)
-	//	}
-	ExposePorts(ports []string) ContainerBuilder
-	// Healthcheck defines a command to check container healthiness.
-	Healthcheck(command string) ContainerBuilder
-	// Build creates a new [Container] object after setting container's required and optional attributes values.
-	Build() Container
-}
-
-// containerBuilder holds attributes values for a new container being built. Implements [ContainerBuilder] interface.
-type containerBuilder struct {
-	name, image string
-	options     ContainerOptions
-}
-
-// SetEnv sets [ContainerBuilder] optional `env` attribute value.
-func (cb *containerBuilder) SetEnv(env []string) ContainerBuilder {
-	cb.options.EnvironmentVariables = env
-	return cb
-}
-
-// ExposePorts sets [ContainerBuilder] optional `ports` attribute value.
-func (cb *containerBuilder) ExposePorts(ports []string) ContainerBuilder {
-	cb.options.ExposedPorts = ports
-	return cb
-}
-
-// Healthcheck sets [ContainerBuilder] optional `healthcheck` attribute value.
-func (cb *containerBuilder) Healthcheck(command string) ContainerBuilder {
-	cb.options.Healthcheck = command
-	return cb
-}
-
-// Build creates a new [Container] object from [ContainerBuilder] one.
-func (cb *containerBuilder) Build() Container {
-	return &container{name: cb.name, image: cb.image, options: cb.options}
-}
-
-// NewContainerBuilder creates a new [ContainerBuilder] object. This object is then used to set optional
-// container attributes values and finally create a new [Container] object.
-//
-// Example:
-//
-//	c := NewContainerBuilder("containerName", "imageName").
-//		SetEnv([]string{"MY_VAR=myvarvalue"}).
-//		ExposePorts([]string{"8080:80"}).
-//		Healthcheck("is_service_running").
-//		Build()
-//	if err := c.Create(context.Context.Background()); err != nil {
-//		panic(err)
-//	}
-func NewContainerBuilder(name string, image string) ContainerBuilder {
-	return &containerBuilder{name: name, image: image, options: ContainerOptions{StartTimeout: defaultContainerStartTimeout}}
+	return &container{image: image, options: options}
 }

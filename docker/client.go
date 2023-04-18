@@ -18,9 +18,9 @@ import (
 // client defines client methods.
 type client interface {
 	pullImage(ctx context.Context, name string) error
-	createContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error)
+	createContainer(ctx context.Context, image string, options *Options) (string, error)
 	startContainer(ctx context.Context, id string) error
-	createStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error)
+	createStartContainer(ctx context.Context, image string, options *Options) (string, error)
 	fetchContainerData(ctx context.Context, container *container) error
 	stopContainer(ctx context.Context, id string) error
 	removeContainer(ctx context.Context, id string) error
@@ -42,7 +42,7 @@ var (
 	newClientFn func(ops ...dockerClient.Opt) (*dockerClient.Client, error) = dockerClient.NewClientWithOpts
 )
 
-// newClient attempts to create a new client with a new Docker client handler.
+// newClient creates a new client object with a new Docker client handler.
 // client is stored in a package private 'cli' variable.
 func newClient() (client, error) {
 	var c *dockerClient.Client
@@ -83,9 +83,8 @@ func (c *defaultClient) pullImage(ctx context.Context, name string) error {
 	return nil
 }
 
-// createContainer attempts to pull image and then calls Docker client ContainerCreate method.
-// Returns created container id.
-func (c *defaultClient) createContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
+// createContainer creates a new Docker container and returns its id.
+func (c *defaultClient) createContainer(ctx context.Context, image string, options *Options) (string, error) {
 	var (
 		hostPortString, containerPortString string
 		healthcheck                         dockerContainer.HealthConfig
@@ -119,7 +118,7 @@ func (c *defaultClient) createContainer(ctx context.Context, image string, name 
 			Healthcheck:  &healthcheck,
 		},
 		&dockerContainer.HostConfig{PortBindings: portBindings},
-		nil, nil, name,
+		nil, nil, options.Name,
 	)
 	if err != nil {
 		return "", err
@@ -133,10 +132,9 @@ func (c *defaultClient) startContainer(ctx context.Context, id string) error {
 	return c.handler.ContainerStart(ctx, id, types.ContainerStartOptions{})
 }
 
-// createStartContainer attempts to create and to start a container.
-// Returns created container id.
-func (c *defaultClient) createStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
-	id, err := c.createContainer(ctx, image, name, options)
+// createStartContainer creates a new Docker container and starts it. Returns created container id.
+func (c *defaultClient) createStartContainer(ctx context.Context, image string, options *Options) (string, error) {
+	id, err := c.createContainer(ctx, image, options)
 	if err != nil {
 		return "", err
 	}
@@ -144,14 +142,20 @@ func (c *defaultClient) createStartContainer(ctx context.Context, image string, 
 	return id, c.startContainer(ctx, id)
 }
 
-// fetchContainerData calls Docker client ContainerList method with a container name filter.
-// Fetched data is saved into container object.
+// fetchContainerData fetches Docker container data and saves it into container object.
+// Container object must have either non-empty name or id field value.
 func (c *defaultClient) fetchContainerData(ctx context.Context, container *container) error {
-	if len(container.name) == 0 {
-		return errEmptyContainerName
-	}
 	filters := dockerContainerFilters.NewArgs()
-	filters.Add("name", "/"+container.name)
+
+	switch {
+	case len(container.options.Name) > 0:
+		filters.Add("name", "/"+container.options.Name)
+	case len(container.id) > 0:
+		filters.Add("id", container.id)
+	default:
+		return errEmptyContainerNameAndID
+	}
+
 	containers, err := c.handler.ContainerList(ctx, types.ContainerListOptions{All: true, Filters: filters})
 	switch {
 	case err != nil:
@@ -175,7 +179,7 @@ func (c *defaultClient) removeContainer(ctx context.Context, id string) error {
 	return c.handler.ContainerRemove(ctx, id, types.ContainerRemoveOptions{})
 }
 
-// stopRemoveContainer attempts to stop and remove container.
+// stopRemoveContainer stops and removes Docker container.
 func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) error {
 	if err := c.stopContainer(ctx, id); err != nil {
 		return err
@@ -183,8 +187,11 @@ func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) erro
 	return c.removeContainer(ctx, id)
 }
 
-// PullImage attempts to pull an image.
+// PullImage pulls a Docker image with the given name.
 func PullImage(ctx context.Context, name string) error {
+	if len(name) == 0 {
+		return errEmptyImageName
+	}
 	c, err := getClient()
 	if err != nil {
 		return err
@@ -193,18 +200,17 @@ func PullImage(ctx context.Context, name string) error {
 	return c.pullImage(ctx, name)
 }
 
-// CreateContainer attempts to create a new container.
-// Returns created container id.
-func CreateContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
+// CreateContainer creates a new Docker container and returns its id.
+func CreateContainer(ctx context.Context, image string, options *Options) (string, error) {
 	c, err := getClient()
 	if err != nil {
 		return "", err
 	}
 	defer c.close()
-	return c.createContainer(ctx, image, name, options)
+	return c.createContainer(ctx, image, options)
 }
 
-// StartContainer attempts to start container.
+// StartContainer starts Docker container.
 func StartContainer(ctx context.Context, id string) error {
 	c, err := getClient()
 	if err != nil {
@@ -214,18 +220,17 @@ func StartContainer(ctx context.Context, id string) error {
 	return c.startContainer(ctx, id)
 }
 
-// CreateStartContainer attempts to create and start a new container.
-// Returns created container id.
-func CreateStartContainer(ctx context.Context, image string, name string, options ContainerOptions) (string, error) {
+// CreateStartContainer creates a new Docker container and starts it. Returns created container id.
+func CreateStartContainer(ctx context.Context, image string, options *Options) (string, error) {
 	c, err := getClient()
 	if err != nil {
 		return "", err
 	}
 	defer c.close()
-	return c.createStartContainer(ctx, image, name, options)
+	return c.createStartContainer(ctx, image, options)
 }
 
-// fetchContainerData attempts to fetch Docker container data.
+// fetchContainerData fetches Docker container data and saves in into container object.
 func fetchContainerData(ctx context.Context, container *container) error {
 	c, err := getClient()
 	if err != nil {
@@ -235,7 +240,7 @@ func fetchContainerData(ctx context.Context, container *container) error {
 	return c.fetchContainerData(ctx, container)
 }
 
-// StopContainer attempts to stop container.
+// StopContainer stops Docker container.
 func StopContainer(ctx context.Context, id string) error {
 	c, err := getClient()
 	if err != nil {
@@ -245,7 +250,7 @@ func StopContainer(ctx context.Context, id string) error {
 	return c.stopContainer(ctx, id)
 }
 
-// RemoveContainer attempts to remove container.
+// RemoveContainer removes Docker container.
 func RemoveContainer(ctx context.Context, id string) error {
 	c, err := getClient()
 	if err != nil {
@@ -255,7 +260,7 @@ func RemoveContainer(ctx context.Context, id string) error {
 	return c.stopContainer(ctx, id)
 }
 
-// StopRemoveContainer attempts to stop and remove container.
+// StopRemoveContainer stops and removes Docker container.
 func StopRemoveContainer(ctx context.Context, id string) error {
 	c, err := getClient()
 	if err != nil {
