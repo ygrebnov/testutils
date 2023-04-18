@@ -8,6 +8,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.2
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.8.2
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -25,6 +26,5 @@ require (
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.1.12 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gotest.tools/v3 v3.4.0 // indirect
 )
