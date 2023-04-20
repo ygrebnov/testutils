@@ -67,7 +67,7 @@ Optional attributes list:
 
 * `Name` - container name,
 * `EnvironmentVariables` - a list of environment variables to be created inside the container. Format is `name=value`,
-* `ExposedPorts` - a list of exposed ports. Format is `container_port:host_port`,
+* `ExposedPorts` - a list of exposed ports. Format is `host_port:container_port`,
 * `Healthcheck` - a command to check whether the service inside container has started. Healthcheck commands are automatically prefixed with `CMD-SHELL`,
 * `StartTimeout` - service inside the container start timeout in seconds. The default value is `60`.
 
@@ -231,7 +231,7 @@ import (
 
 func Test_SomeFunction(t *testing.T) {
 	ctx := context.Background()
-	options := docker.Options{ExposedPorts: []string{"5432:5433"}} // container port 5432 is bound to the host 5433 port, other configuration remains unchanged
+	options := docker.Options{ExposedPorts: []string{"5433:5432"}} // container port 5432 is bound to the host 5433 port, other configuration remains unchanged
 	testContainer := presets.NewCustomizedPostgresqlContainer(options)
 	require.NoError(t, testContainer.CreateStart(ctx)) // creates and starts a new PostgreSQL Docker container on host
 	defer func() { require.NoError(t, testContainer.StopRemove(ctx)) }() // stops and removes PostgreSQL Docker container at the end of the test

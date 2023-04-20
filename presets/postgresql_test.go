@@ -12,9 +12,8 @@ func Test_PostgresqlPreset(t *testing.T) {
 	expectedContainer := docker.NewContainerWithOptions(
 		"postgres",
 		docker.Options{
-			Name:                 "postgresqlPresetContainer",
 			Healthcheck:          "pg_isready",
-			EnvironmentVariables: []string{"POSTGRES_USER=postgres", "POSTGRES_PASSWORD=postgresqlPresetPassword", "PGPORT=5432"},
+			EnvironmentVariables: []string{"POSTGRES_USER=postgres", "POSTGRES_PASSWORD=postgres", "PGPORT=5432"},
 			ExposedPorts:         []string{"5432:5432"},
 		})
 
