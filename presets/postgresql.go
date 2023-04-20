@@ -2,7 +2,7 @@ package presets
 
 import "github.com/ygrebnov/testutils/docker"
 
-var postgresqlPreset = newPreset("values/postgresql.yml")
+var postgresqlPreset = newPreset("postgresql.yaml")
 
 // NewCustomizedPostgresqlContainer returns a preset [github.com/ygrebnov/testutils/docker.Container] object with
 // customized options values.

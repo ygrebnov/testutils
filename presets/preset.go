@@ -1,5 +1,5 @@
 // Package presets contains a collection of preset [github.com/ygrebnov/testutils/docker.Container] objects.
-package presets
+package presets // import "github.com/ygrebnov/testutils/presets"
 
 import (
 	"fmt"
