@@ -23,6 +23,7 @@ type Container interface {
 	Remove(ctx context.Context) error
 	StopRemove(ctx context.Context) error
 	HasStarted(ctx context.Context) (bool, error)
+	Exec(ctx context.Context, command string) error
 }
 
 // container holds container data. Implements Container interface.
@@ -144,6 +145,11 @@ func (c *container) HasStarted(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	return c.state == containerStateRunning && !strings.Contains(c.status, "health: "+types.Starting), nil
+}
+
+// Exec executes shell command in container.
+func (c *container) Exec(ctx context.Context, command string) error {
+	return ExecCommand(ctx, c.id, command)
 }
 
 // NewContainer creates a new [Container] object.

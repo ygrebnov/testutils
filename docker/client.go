@@ -25,6 +25,7 @@ type client interface {
 	stopContainer(ctx context.Context, id string) error
 	removeContainer(ctx context.Context, id string) error
 	stopRemoveContainer(ctx context.Context, id string) error
+	execCommand(ctx context.Context, id string, command string) error
 	close()
 }
 
@@ -187,6 +188,12 @@ func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) erro
 	return c.removeContainer(ctx, id)
 }
 
+// execCommand executes shell command in Docker container.
+func (c *defaultClient) execCommand(ctx context.Context, id string, command string) error {
+	_, err := c.handler.ContainerExecCreate(ctx, id, types.ExecConfig{Cmd: strings.Split(command, " ")})
+	return err
+}
+
 // PullImage pulls a Docker image with the given name.
 func PullImage(ctx context.Context, name string) error {
 	if len(name) == 0 {
@@ -268,4 +275,14 @@ func StopRemoveContainer(ctx context.Context, id string) error {
 	}
 	defer c.close()
 	return c.stopRemoveContainer(ctx, id)
+}
+
+// ExecCommand executes given shell command in Docker container.
+func ExecCommand(ctx context.Context, id string, command string) error {
+	c, err := getClient()
+	if err != nil {
+		return err
+	}
+	defer c.close()
+	return c.execCommand(ctx, id, command)
 }
