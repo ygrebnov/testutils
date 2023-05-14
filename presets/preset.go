@@ -46,8 +46,8 @@ type presetImage struct {
 }
 
 // newPreset creates a new `preset` object with attributes values from the given yaml file.
-func newPreset(valuesFile string) preset {
-	p := defaultPreset{}
+func newPreset[T preset](valuesFile string) *T {
+	p := new(T)
 	_, currFile, _, ok := runtime.Caller(0)
 	if !ok {
 		panic(errors.New("cannot locate preset values file"))
@@ -57,19 +57,19 @@ func newPreset(valuesFile string) preset {
 	if err != nil {
 		panic(err)
 	}
-	if err := yaml.Unmarshal(valuesData, &p); err != nil {
+	if err := yaml.Unmarshal(valuesData, p); err != nil {
 		panic(err)
 	}
-	return &p
+	return p
 }
 
 // asContainer returns a [docker.Container] object with preset attribute values.
-func (p *defaultPreset) asContainer() docker.Container {
+func (p defaultPreset) asContainer() docker.Container {
 	return docker.NewContainerWithOptions(p.Image.Name, p.getPresetContainerOptions())
 }
 
 // asCustomizedContainer returns a [docker.Container] with preset attribute values overwritten by customized ones.
-func (p *defaultPreset) asCustomizedContainer(options docker.Options) docker.Container {
+func (p defaultPreset) asCustomizedContainer(options docker.Options) docker.Container {
 	combinedOptions := p.getPresetContainerOptions()
 	if len(options.Name) > 0 {
 		combinedOptions.Name = options.Name

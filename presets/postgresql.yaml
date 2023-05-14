@@ -11,3 +11,5 @@ container:
   healthcheck: "pg_isready"
 image:
   name: "postgres"
+database:
+  name: "postgres"
