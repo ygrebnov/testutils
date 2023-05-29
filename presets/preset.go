@@ -15,13 +15,17 @@ import (
 )
 
 // preset represents a type capable of producing preset and customizable [docker.Container] objects.
-type preset interface {
-	asContainer() docker.Container
-	asCustomizedContainer(options docker.Options) docker.Container
+type preset[T any] interface {
+	asContainer() T
+	asCustomizedContainer(options docker.Options) T
 }
 
-// defaultPreset is a default implementation of `preset` interface. defaultPreset holds container and image data.
-type defaultPreset struct {
+// nolint: unused
+type containerPreset = preset[docker.Container]
+
+// defaultContainerPreset is a default implementation of `preset` interface.
+// defaultContainerPreset holds container and image data.
+type defaultContainerPreset struct {
 	Container presetContainer `yaml:"container"`
 	Image     presetImage     `yaml:"image"`
 }
@@ -45,9 +49,16 @@ type presetImage struct {
 	Name string `yaml:"name"`
 }
 
-// newPreset creates a new `preset` object with attributes values from the given yaml file.
-func newPreset(valuesFile string) preset {
-	p := defaultPreset{}
+// newContainerPreset creates a new `containerPreset` object.
+// nolint: unused
+func newContainerPreset(valuesFile string) containerPreset {
+	p := new(defaultContainerPreset)
+	parsePresetValues(valuesFile, p)
+	return p
+}
+
+// parsePresetValues sets given `preset` object attributes with values from the given yaml file.
+func parsePresetValues(valuesFile string, preset any) {
 	_, currFile, _, ok := runtime.Caller(0)
 	if !ok {
 		panic(errors.New("cannot locate preset values file"))
@@ -57,40 +68,26 @@ func newPreset(valuesFile string) preset {
 	if err != nil {
 		panic(err)
 	}
-	if err := yaml.Unmarshal(valuesData, &p); err != nil {
+	if err := yaml.Unmarshal(valuesData, preset); err != nil {
 		panic(err)
 	}
-	return &p
 }
 
 // asContainer returns a [docker.Container] object with preset attribute values.
-func (p *defaultPreset) asContainer() docker.Container {
+// nolint: unused
+func (p *defaultContainerPreset) asContainer() docker.Container {
 	return docker.NewContainerWithOptions(p.Image.Name, p.getPresetContainerOptions())
 }
 
 // asCustomizedContainer returns a [docker.Container] with preset attribute values overwritten by customized ones.
-func (p *defaultPreset) asCustomizedContainer(options docker.Options) docker.Container {
-	combinedOptions := p.getPresetContainerOptions()
-	if len(options.Name) > 0 {
-		combinedOptions.Name = options.Name
-	}
-	if len(options.EnvironmentVariables) > 0 {
-		combinedOptions.EnvironmentVariables = options.EnvironmentVariables
-	}
-	if len(options.ExposedPorts) > 0 {
-		combinedOptions.ExposedPorts = options.ExposedPorts
-	}
-	if len(options.Healthcheck) > 0 {
-		combinedOptions.Healthcheck = options.Healthcheck
-	}
-	if options.StartTimeout > 0 {
-		combinedOptions.StartTimeout = options.StartTimeout
-	}
-	return docker.NewContainerWithOptions(p.Image.Name, combinedOptions)
+// nolint: unused
+func (p *defaultContainerPreset) asCustomizedContainer(options docker.Options) docker.Container {
+	return docker.NewContainerWithOptions(p.Image.Name, p.combineContainerOptions(options))
 }
 
 // getPresetContainerOptions returns a [docker.Options] object with attributes values from preset yaml file.
-func (p *defaultPreset) getPresetContainerOptions() docker.Options {
+// nolint: unused
+func (p *defaultContainerPreset) getPresetContainerOptions() docker.Options {
 	env := make([]string, 0, len(p.Container.Env))
 	for _, el := range p.Container.Env {
 		var stringVal string
@@ -110,4 +107,25 @@ func (p *defaultPreset) getPresetContainerOptions() docker.Options {
 		EnvironmentVariables: env,
 		ExposedPorts:         p.Container.Ports,
 	}
+}
+
+// nolint: unused
+func (p *defaultContainerPreset) combineContainerOptions(options docker.Options) docker.Options {
+	combinedOptions := p.getPresetContainerOptions()
+	if len(options.Name) > 0 {
+		combinedOptions.Name = options.Name
+	}
+	if len(options.EnvironmentVariables) > 0 {
+		combinedOptions.EnvironmentVariables = options.EnvironmentVariables
+	}
+	if len(options.ExposedPorts) > 0 {
+		combinedOptions.ExposedPorts = options.ExposedPorts
+	}
+	if len(options.Healthcheck) > 0 {
+		combinedOptions.Healthcheck = options.Healthcheck
+	}
+	if options.StartTimeout > 0 {
+		combinedOptions.StartTimeout = options.StartTimeout
+	}
+	return combinedOptions
 }

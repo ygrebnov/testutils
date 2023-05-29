@@ -11,3 +11,6 @@ container:
   healthcheck: "pg_isready"
 image:
   name: "postgres"
+database:
+  name: "postgres"
+  reset_command: "dropdb -f --username=postgres -e postgres; createdb --username=postgres -e postgres"

@@ -3,6 +3,7 @@
 package docker
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"strings"
@@ -25,6 +26,7 @@ type client interface {
 	stopContainer(ctx context.Context, id string) error
 	removeContainer(ctx context.Context, id string) error
 	stopRemoveContainer(ctx context.Context, id string) error
+	execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error
 	close()
 }
 
@@ -187,6 +189,26 @@ func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) erro
 	return c.removeContainer(ctx, id)
 }
 
+// execCommand executes shell command in Docker container.
+func (c *defaultClient) execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error {
+	r, err := c.handler.ContainerExecCreate(ctx, id, types.ExecConfig{
+		Cmd:          []string{"bash", "-c", command},
+		AttachStderr: true,
+		AttachStdout: true,
+	})
+	if err != nil {
+		return err
+	}
+	resp, err := c.handler.ContainerExecAttach(context.Background(), r.ID, types.ExecStartCheck{})
+	if err != nil {
+		return err
+	}
+	defer resp.Close()
+
+	_, err = io.Copy(buffer, resp.Reader)
+	return err
+}
+
 // PullImage pulls a Docker image with the given name.
 func PullImage(ctx context.Context, name string) error {
 	if len(name) == 0 {
@@ -268,4 +290,14 @@ func StopRemoveContainer(ctx context.Context, id string) error {
 	}
 	defer c.close()
 	return c.stopRemoveContainer(ctx, id)
+}
+
+// ExecCommand executes given shell command in Docker container.
+func ExecCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error {
+	c, err := getClient()
+	if err != nil {
+		return err
+	}
+	defer c.close()
+	return c.execCommand(ctx, id, command, buffer)
 }
