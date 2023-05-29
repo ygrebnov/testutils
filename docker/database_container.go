@@ -1,6 +1,9 @@
 package docker
 
-import "context"
+import (
+	"bytes"
+	"context"
+)
 
 // DatabaseContainer extends [Container] interface with database interaction methods.
 type DatabaseContainer interface {
@@ -10,8 +13,8 @@ type DatabaseContainer interface {
 
 // Database holds database metadata.
 type Database struct {
-	name         string
-	resetCommand string
+	Name         string
+	ResetCommand string
 }
 
 // databaseContainer holds container and inner database metadata. Implements [DatabaseContainer] interface.
@@ -22,7 +25,8 @@ type databaseContainer struct {
 
 // ResetDatabase executes database reset command in container.
 func (dc *databaseContainer) ResetDatabase(ctx context.Context) error {
-	return dc.Exec(ctx, dc.database.resetCommand)
+	buffer := bytes.Buffer{}
+	return dc.Exec(ctx, dc.database.ResetCommand, &buffer)
 }
 
 // NewDatabaseContainer creates a new [DatabaseContainer] object.
