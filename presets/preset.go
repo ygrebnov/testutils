@@ -2,13 +2,13 @@
 package presets // import "github.com/ygrebnov/testutils/presets"
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 
-	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 
 	"github.com/ygrebnov/testutils/docker"
@@ -50,7 +50,7 @@ type presetImage struct {
 }
 
 // newContainerPreset creates a new `containerPreset` object.
-// nolint: unused
+// TODO: add a test for this function.
 func newContainerPreset(valuesFile string) containerPreset {
 	p := new(defaultContainerPreset)
 	parsePresetValues(valuesFile, p)
@@ -75,6 +75,7 @@ func parsePresetValues(valuesFile string, preset any) {
 
 // asContainer returns a [docker.Container] object with preset attribute values.
 // nolint: unused
+// TODO: add a test for this method.
 func (p *defaultContainerPreset) asContainer() docker.Container {
 	return docker.NewContainerWithOptions(p.Image.Name, p.getPresetContainerOptions())
 }
@@ -112,7 +113,7 @@ func (p *defaultContainerPreset) getPresetContainerOptions() docker.Options {
 // nolint: unused
 func (p *defaultContainerPreset) combineContainerOptions(options docker.Options) docker.Options {
 	combinedOptions := p.getPresetContainerOptions()
-	if len(options.Name) > 0 {
+	if options.Name != "" {
 		combinedOptions.Name = options.Name
 	}
 	if len(options.EnvironmentVariables) > 0 {
@@ -121,7 +122,7 @@ func (p *defaultContainerPreset) combineContainerOptions(options docker.Options)
 	if len(options.ExposedPorts) > 0 {
 		combinedOptions.ExposedPorts = options.ExposedPorts
 	}
-	if len(options.Healthcheck) > 0 {
+	if options.Healthcheck != "" {
 		combinedOptions.Healthcheck = options.Healthcheck
 	}
 	if options.StartTimeout > 0 {

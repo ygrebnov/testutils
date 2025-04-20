@@ -7,7 +7,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
@@ -55,7 +54,7 @@ func (mdc *mockedDockerClient) ContainerStart(
 func (mdc *mockedDockerClient) ContainerList(
 	_ context.Context,
 	_ dockerContainer.ListOptions,
-) ([]types.Container, error) {
+) ([]dockerContainer.Summary, error) {
 	return mockedContainerListValues.next()
 }
 
@@ -82,9 +81,9 @@ func (mdc *mockedDockerClient) Close() error {
 	return nil
 }
 
-// containerListMockValue contains a pair of mocked [dockerClient.Client.ContainerList] method return values
+// containerListMockValue contains a pair of mocked [dockerClient.Client.ContainerList] method return values.
 type containerListMockValue struct {
-	mockContainers []types.Container
+	mockContainers []dockerContainer.Summary
 	mockError      error
 }
 
@@ -97,7 +96,7 @@ type containerListMockValues struct {
 }
 
 // next iteratively returns containerListMockValues values to caller.
-func (cl *containerListMockValues) next() ([]types.Container, error) {
+func (cl *containerListMockValues) next() ([]dockerContainer.Summary, error) {
 	if cl.size == 1 {
 		return cl.values[0].mockContainers, cl.values[0].mockError
 	}
@@ -130,9 +129,9 @@ type mockedContainer struct {
 	status string
 }
 
-// asTypesContainer converts mocked container into an object of external 'types.Container' type.
-func (mc *mockedContainer) asTypesContainer() types.Container {
-	return types.Container{ID: mc.id, Names: []string{"/" + mc.name}, Image: mc.image, State: mc.state, Status: mc.status}
+// asTypesContainer converts mocked container into an object of external [dockerContainer.Summary] type.
+func (mc *mockedContainer) asTypesContainer() dockerContainer.Summary {
+	return dockerContainer.Summary{ID: mc.id, Names: []string{"/" + mc.name}, Image: mc.image, State: mc.state, Status: mc.status}
 }
 
 // asContainer converts mocked container into an object of internal 'container' type.
@@ -190,9 +189,9 @@ var (
 	errDuplicateContainerNameMock = errors.New("mockedDuplicateContainerNameError")
 	errContainerListTechnicalMock = errors.New("mockedContainerListTechnicalError")
 
-	mockedEmptyContainerList                = []types.Container{}
-	mockedCreatedInContainerList            = []types.Container{mockedCreatedContainer.asTypesContainer()}
-	mockedRunningInContainerList            = []types.Container{mockedRunningContainer.asTypesContainer()}
+	mockedEmptyContainerList                = []dockerContainer.Summary{}
+	mockedCreatedInContainerList            = []dockerContainer.Summary{mockedCreatedContainer.asTypesContainer()}
+	mockedRunningInContainerList            = []dockerContainer.Summary{mockedRunningContainer.asTypesContainer()}
 	mockedContainerListValuesCreatedRunning = newContainerListMockValues(
 		containerListMockValue{mockedCreatedInContainerList, nil},
 		containerListMockValue{mockedRunningInContainerList, nil},

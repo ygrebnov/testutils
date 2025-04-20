@@ -3,11 +3,11 @@ package docker
 import (
 	"bytes"
 	"context"
+	"errors"
 	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -50,18 +50,19 @@ var (
 
 // Create creates a new Docker container and saves its id to the container object.
 func (c *container) Create(ctx context.Context) error {
-	if err = PullImage(ctx, c.image); err != nil {
+	err := PullImage(ctx, c.image)
+	if err != nil {
 		return err
 	}
 	c.id, err = CreateContainer(ctx, c.image, &c.options)
 	return err
 }
 
-// Start starts Docker container and waits until it is in `running` state. In case healthcheck is defined for the container,
+// Start starts Docker container and waits until it is in `running` state.
+// In case healthcheck is defined for the container,
 // also waits for service inside the container to finish starting.
 func (c *container) Start(ctx context.Context) error {
-	var started bool
-	started, err = c.HasStarted(ctx)
+	started, err := c.HasStarted(ctx)
 	if err != nil {
 		return err
 	} else if started {
@@ -89,7 +90,7 @@ func (c *container) Start(ctx context.Context) error {
 
 // CreateStart creates a new Docker container and starts it.
 func (c *container) CreateStart(ctx context.Context) error {
-	if err = c.Create(ctx); err != nil {
+	if err := c.Create(ctx); err != nil {
 		return err
 	}
 	return c.Start(ctx)
@@ -102,8 +103,8 @@ func (c *container) fetchData(ctx context.Context) error {
 
 // Stop stops Docker container.
 func (c *container) Stop(ctx context.Context) error {
-	if len(c.id) == 0 {
-		if err = c.fetchData(ctx); err != nil {
+	if c.id == "" {
+		if err := c.fetchData(ctx); err != nil {
 			return err
 		}
 	}
@@ -112,10 +113,12 @@ func (c *container) Stop(ctx context.Context) error {
 
 // Remove removes Docker container.
 func (c *container) Remove(ctx context.Context) error {
-	// fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
-	// In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
-	err = c.fetchData(ctx)
-	switch err {
+	// fetchData is called in any case, even if container id is non-empty,
+	// because fetchData can return errContainerNotFound.
+	// In this way, we avoid returning this error to the caller and allow him
+	// to proceed the program normal flow execution.
+	err := c.fetchData(ctx)
+	switch err { // TODO: replace with errors.Is
 	case errContainerNotFound:
 		return nil
 	case nil:
@@ -126,10 +129,12 @@ func (c *container) Remove(ctx context.Context) error {
 
 // StopRemove stops Docker container and removes it.
 func (c *container) StopRemove(ctx context.Context) error {
-	// fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
-	// In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
-	err = c.fetchData(ctx)
-	switch err {
+	// fetchData is called in any case, even if container id is non-empty,
+	// because fetchData can return errContainerNotFound.
+	// In this way, we avoid returning this error to the caller and allow him
+	// to proceed the program normal flow execution.
+	err := c.fetchData(ctx)
+	switch err { // TODO: replace with errors.Is
 	case errContainerNotFound:
 		return nil
 	case nil:
@@ -142,7 +147,7 @@ func (c *container) StopRemove(ctx context.Context) error {
 // and a service inside it have started.
 // Container is considered as started if its state is 'running' and not 'health: starting'.
 func (c *container) HasStarted(ctx context.Context) (bool, error) {
-	if err = c.fetchData(ctx); err != nil {
+	if err := c.fetchData(ctx); err != nil {
 		return false, err
 	}
 	return c.state == containerStateRunning && !strings.Contains(c.status, "health: "+types.Starting), nil

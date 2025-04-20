@@ -16,7 +16,7 @@ var (
 
 func Test_NewClient(t *testing.T) {
 	// newClientFn points to a function returning a mocked Docker client and error.
-	newClientFn = func(ops ...dockerClient.Opt) (*dockerClient.Client, error) {
+	newClientFn = func(...dockerClient.Opt) (*dockerClient.Client, error) {
 		return &mockedClient, errNewClient
 	}
 

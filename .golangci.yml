@@ -1,79 +1,111 @@
-run:
-  skip-dirs:
-    - vendor
-
+version: "2"
 output:
-  format: colored-line-number
-
-linters-settings:
-  govet:
-    check-shadowing: true
-  revive:
-    min-confidence: 0.8
-  gocyclo:
-    min-complexity: 30
-  dupl:
-    threshold: 100
-  goconst:
-    min-len: 2
-    min-occurences: 2
-  lll:
-    line-length: 160
-  gocritic:
-    disabled-tags:
-      - optionated
-      - experimental
-  funlen:
-    lines: 100
-    statements: 50
-  nakedret:
-    max-func-lines: 40
-
+  formats:
+    text:
+      path: stdout
 linters:
-  disable-all: true
+  default: none
   enable:
-    - bodyclose
+    - copyloopvar
     - depguard
     - dogsled
     - dupl
+    - durationcheck
     - errcheck
-    - exportloopref
+    - exhaustive
     - funlen
     - goconst
     - gocritic
     - gocyclo
-    - gofmt
-    - goimports
+    - godot
+    - gomoddirectives
     - gosec
-    - gosimple
     - govet
+    - importas
     - ineffassign
     - lll
     - misspell
     - nakedret
+    - nilerr
+    - noctx
+    - nolintlint
+    - prealloc
+    - predeclared
     - revive
     - staticcheck
-    - stylecheck
-    - typecheck
+    - tparallel
     - unconvert
+    - unparam
     - unused
+    - wastedassign
     - whitespace
-
-issues:
-  exclude-rules:
-    - path: _test.go
-      linters:
-        - dogsled
-        - dupl
-        - gosec
-        - funlen
-        - gocyclo
-        - gocritic
-        - govet
-        - lll
-        - ineffassign
-        - noctx
-        - unused
-    - text: declaration of "err" shadows declaration
-      linters:
-        - govet
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: github.com/pkg/errors
+              desc: Use `errors` package from the standard library
+    dupl:
+      threshold: 100
+    funlen:
+      ignore-comments: true
+    goconst:
+      min-len: 2
+      min-occurrences: 2
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+        - performance
+        - experimental
+        - opinionated
+    gocyclo:
+      min-complexity: 10
+    godot:
+      capital: false
+    govet:
+      enable:
+        - shadow
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dogsled
+          - dupl
+          - funlen
+          - gosec
+          - govet
+          - lll
+        path: _test.go
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/ygrebnov/links)
+    goimports:
+      local-prefixes:
+        - github.com/ygrebnov/links
+  exclusions:
+    generated: lax
+    paths:
+      - vendor
+      - third_party$
+      - builtin$
+      - examples$
