@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
 	dockerContainerFilters "github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/image"
 	dockerClient "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -77,7 +77,7 @@ func (c *defaultClient) close() {
 // pullImage calls Docker client ImagePull method. Ignores method execution output.
 func (c *defaultClient) pullImage(ctx context.Context, name string) error {
 	var reader io.ReadCloser
-	if reader, err = c.handler.ImagePull(ctx, name, types.ImagePullOptions{}); err != nil {
+	if reader, err = c.handler.ImagePull(ctx, name, image.PullOptions{}); err != nil {
 		return err
 	}
 	defer reader.Close()
@@ -131,7 +131,7 @@ func (c *defaultClient) createContainer(ctx context.Context, image string, optio
 
 // startContainer calls Docker client ContainerStart method.
 func (c *defaultClient) startContainer(ctx context.Context, id string) error {
-	return c.handler.ContainerStart(ctx, id, types.ContainerStartOptions{})
+	return c.handler.ContainerStart(ctx, id, dockerContainer.StartOptions{})
 }
 
 // createStartContainer creates a new Docker container and starts it. Returns created container id.
@@ -158,7 +158,7 @@ func (c *defaultClient) fetchContainerData(ctx context.Context, container *conta
 		return errEmptyContainerNameAndID
 	}
 
-	containers, err := c.handler.ContainerList(ctx, types.ContainerListOptions{All: true, Filters: filters})
+	containers, err := c.handler.ContainerList(ctx, dockerContainer.ListOptions{All: true, Filters: filters})
 	switch {
 	case err != nil:
 		return err
@@ -178,7 +178,7 @@ func (c *defaultClient) stopContainer(ctx context.Context, id string) error {
 
 // removeContainer calls Docker client ContainerRemove method.
 func (c *defaultClient) removeContainer(ctx context.Context, id string) error {
-	return c.handler.ContainerRemove(ctx, id, types.ContainerRemoveOptions{})
+	return c.handler.ContainerRemove(ctx, id, dockerContainer.RemoveOptions{})
 }
 
 // stopRemoveContainer stops and removes Docker container.
@@ -191,7 +191,7 @@ func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) erro
 
 // execCommand executes shell command in Docker container.
 func (c *defaultClient) execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error {
-	r, err := c.handler.ContainerExecCreate(ctx, id, types.ExecConfig{
+	r, err := c.handler.ContainerExecCreate(ctx, id, dockerContainer.ExecOptions{
 		Cmd:          []string{"bash", "-c", command},
 		AttachStderr: true,
 		AttachStdout: true,
@@ -199,7 +199,7 @@ func (c *defaultClient) execCommand(ctx context.Context, id string, command stri
 	if err != nil {
 		return err
 	}
-	resp, err := c.handler.ContainerExecAttach(context.Background(), r.ID, types.ExecStartCheck{})
+	resp, err := c.handler.ContainerExecAttach(context.Background(), r.ID, dockerContainer.ExecAttachOptions{})
 	if err != nil {
 		return err
 	}

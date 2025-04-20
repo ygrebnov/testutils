@@ -1,0 +1,826 @@
+
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		<title>docker: Go Coverage Report</title>
+		<style>
+			body {
+				background: black;
+				color: rgb(80, 80, 80);
+			}
+			body, pre, #legend span {
+				font-family: Menlo, monospace;
+				font-weight: bold;
+			}
+			#topbar {
+				background: black;
+				position: fixed;
+				top: 0; left: 0; right: 0;
+				height: 42px;
+				border-bottom: 1px solid rgb(80, 80, 80);
+			}
+			#content {
+				margin-top: 50px;
+			}
+			#nav, #legend {
+				float: left;
+				margin-left: 10px;
+			}
+			#legend {
+				margin-top: 12px;
+			}
+			#nav {
+				margin-top: 10px;
+			}
+			#legend span {
+				margin: 0 5px;
+			}
+			.cov0 { color: rgb(192, 0, 0) }
+.cov1 { color: rgb(128, 128, 128) }
+.cov2 { color: rgb(116, 140, 131) }
+.cov3 { color: rgb(104, 152, 134) }
+.cov4 { color: rgb(92, 164, 137) }
+.cov5 { color: rgb(80, 176, 140) }
+.cov6 { color: rgb(68, 188, 143) }
+.cov7 { color: rgb(56, 200, 146) }
+.cov8 { color: rgb(44, 212, 149) }
+.cov9 { color: rgb(32, 224, 152) }
+.cov10 { color: rgb(20, 236, 155) }
+
+		</style>
+	</head>
+	<body>
+		<div id="topbar">
+			<div id="nav">
+				<select id="files">
+				
+				<option value="file0">github.com/ygrebnov/testutils/docker/client.go (80.2%)</option>
+				
+				<option value="file1">github.com/ygrebnov/testutils/docker/container.go (93.6%)</option>
+				
+				<option value="file2">github.com/ygrebnov/testutils/docker/database_container.go (88.9%)</option>
+				
+				<option value="file3">github.com/ygrebnov/testutils/presets/database_preset.go (100.0%)</option>
+				
+				<option value="file4">github.com/ygrebnov/testutils/presets/postgresql.go (100.0%)</option>
+				
+				<option value="file5">github.com/ygrebnov/testutils/presets/preset.go (62.9%)</option>
+				
+				</select>
+			</div>
+			<div id="legend">
+				<span>not tracked</span>
+			
+				<span class="cov0">not covered</span>
+				<span class="cov8">covered</span>
+			
+			</div>
+		</div>
+		<div id="content">
+		
+		<pre class="file" id="file0" style="display: none">// Package docker is a collection of utilities to operate Docker objects in Go code tests
+// in a simplified manner.
+package docker
+
+import (
+        "bytes"
+        "context"
+        "io"
+        "strings"
+        "time"
+
+        dockerContainer "github.com/docker/docker/api/types/container"
+        dockerContainerFilters "github.com/docker/docker/api/types/filters"
+        "github.com/docker/docker/api/types/image"
+        dockerClient "github.com/docker/docker/client"
+        "github.com/docker/go-connections/nat"
+)
+
+// client defines client methods.
+type client interface {
+        pullImage(ctx context.Context, name string) error
+        createContainer(ctx context.Context, image string, options *Options) (string, error)
+        startContainer(ctx context.Context, id string) error
+        createStartContainer(ctx context.Context, image string, options *Options) (string, error)
+        fetchContainerData(ctx context.Context, container *container) error
+        stopContainer(ctx context.Context, id string) error
+        removeContainer(ctx context.Context, id string) error
+        stopRemoveContainer(ctx context.Context, id string) error
+        execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error
+        close()
+}
+
+// defaultClient holds Docker client handler. Implements client interface.
+type defaultClient struct {
+        handler dockerClient.CommonAPIClient
+}
+
+var (
+        // cli points to a client
+        cli client
+        err error
+        ok  bool
+        // newClientFn is used to simplify testability of newClient function.
+        newClientFn func(ops ...dockerClient.Opt) (*dockerClient.Client, error) = dockerClient.NewClientWithOpts
+)
+
+// newClient creates a new client object with a new Docker client handler.
+// client is stored in a package private 'cli' variable.
+func newClient() (client, error) <span class="cov8" title="1">{
+        var c *dockerClient.Client
+
+        c, err = newClientFn(
+                dockerClient.FromEnv,
+                dockerClient.WithAPIVersionNegotiation(),
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                return nil, err
+        }</span>
+
+        <span class="cov8" title="1">cli = &amp;defaultClient{handler: c}
+        return cli, nil</span>
+}
+
+// getClient returns a pointer to client, stored in 'cli' variable or a newly created one.
+func getClient() (client, error) <span class="cov8" title="1">{
+        if cli != nil </span><span class="cov8" title="1">{
+                return cli, nil
+        }</span>
+        <span class="cov8" title="1">return newClient()</span>
+}
+
+// close calls Docker client Close method.
+func (c *defaultClient) close() <span class="cov8" title="1">{
+        c.handler.Close()
+}</span>
+
+// pullImage calls Docker client ImagePull method. Ignores method execution output.
+func (c *defaultClient) pullImage(ctx context.Context, name string) error <span class="cov8" title="1">{
+        var reader io.ReadCloser
+        if reader, err = c.handler.ImagePull(ctx, name, image.PullOptions{}); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer reader.Close()
+        io.ReadAll(reader) // nolint: errcheck
+        return nil</span>
+}
+
+// createContainer creates a new Docker container and returns its id.
+func (c *defaultClient) createContainer(ctx context.Context, image string, options *Options) (string, error) <span class="cov8" title="1">{
+        var (
+                hostPortString, containerPortString string
+                healthcheck                         dockerContainer.HealthConfig
+        )
+        exposedPorts := make(nat.PortSet, len(options.ExposedPorts))
+        portBindings := make(nat.PortMap, len(options.ExposedPorts))
+        for _, port := range options.ExposedPorts </span><span class="cov8" title="1">{
+                if hostPortString, containerPortString, ok = strings.Cut(port, ":"); !ok </span><span class="cov0" title="0">{
+                        return "", errIncorrectPortConfig
+                }</span>
+                <span class="cov8" title="1">containerPort := nat.Port(containerPortString + "/tcp")
+                exposedPorts[containerPort] = struct{}{}
+                portBindings[containerPort] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: hostPortString}}</span>
+        }
+        <span class="cov8" title="1">if len(options.Healthcheck) &gt; 0 </span><span class="cov8" title="1">{
+                healthcheck.Test = strings.Split("CMD-SHELL "+options.Healthcheck, " ")
+                healthcheck.Retries = 29
+                healthcheck.StartPeriod = time.Second * 2
+                healthcheck.Interval = time.Second * 2
+                healthcheck.Timeout = time.Second * 10
+        }</span>
+        <span class="cov8" title="1">if err := c.pullImage(ctx, image); err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov8" title="1">resp, err := c.handler.ContainerCreate(
+                ctx,
+                &amp;dockerContainer.Config{
+                        Image:        image,
+                        Env:          options.EnvironmentVariables,
+                        ExposedPorts: exposedPorts,
+                        Healthcheck:  &amp;healthcheck,
+                },
+                &amp;dockerContainer.HostConfig{PortBindings: portBindings},
+                nil, nil, options.Name,
+        )
+        if err != nil </span><span class="cov8" title="1">{
+                return "", err
+        }</span>
+
+        <span class="cov8" title="1">return resp.ID, nil</span>
+}
+
+// startContainer calls Docker client ContainerStart method.
+func (c *defaultClient) startContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        return c.handler.ContainerStart(ctx, id, dockerContainer.StartOptions{})
+}</span>
+
+// createStartContainer creates a new Docker container and starts it. Returns created container id.
+func (c *defaultClient) createStartContainer(ctx context.Context, image string, options *Options) (string, error) <span class="cov0" title="0">{
+        id, err := c.createContainer(ctx, image, options)
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+
+        <span class="cov0" title="0">return id, c.startContainer(ctx, id)</span>
+}
+
+// fetchContainerData fetches Docker container data and saves it into container object.
+// Container object must have either non-empty name or id field value.
+func (c *defaultClient) fetchContainerData(ctx context.Context, container *container) error <span class="cov8" title="1">{
+        filters := dockerContainerFilters.NewArgs()
+
+        switch </span>{
+        case len(container.options.Name) &gt; 0:<span class="cov8" title="1">
+                filters.Add("name", "/"+container.options.Name)</span>
+        case len(container.id) &gt; 0:<span class="cov0" title="0">
+                filters.Add("id", container.id)</span>
+        default:<span class="cov8" title="1">
+                return errEmptyContainerNameAndID</span>
+        }
+
+        <span class="cov8" title="1">containers, err := c.handler.ContainerList(ctx, dockerContainer.ListOptions{All: true, Filters: filters})
+        switch </span>{
+        case err != nil:<span class="cov8" title="1">
+                return err</span>
+        case len(containers) == 0:<span class="cov8" title="1">
+                return errContainerNotFound</span>
+        }
+        <span class="cov8" title="1">container.id = containers[0].ID
+        container.state = containers[0].State
+        container.status = containers[0].Status
+        return nil</span>
+}
+
+// stopContainer calls Docker client ContainerStop method.
+func (c *defaultClient) stopContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        return c.handler.ContainerStop(ctx, id, dockerContainer.StopOptions{})
+}</span>
+
+// removeContainer calls Docker client ContainerRemove method.
+func (c *defaultClient) removeContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        return c.handler.ContainerRemove(ctx, id, dockerContainer.RemoveOptions{})
+}</span>
+
+// stopRemoveContainer stops and removes Docker container.
+func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        if err := c.stopContainer(ctx, id); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">return c.removeContainer(ctx, id)</span>
+}
+
+// execCommand executes shell command in Docker container.
+func (c *defaultClient) execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error <span class="cov8" title="1">{
+        r, err := c.handler.ContainerExecCreate(ctx, id, dockerContainer.ExecOptions{
+                Cmd:          []string{"bash", "-c", command},
+                AttachStderr: true,
+                AttachStdout: true,
+        })
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">resp, err := c.handler.ContainerExecAttach(context.Background(), r.ID, dockerContainer.ExecAttachOptions{})
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer resp.Close()
+
+        _, err = io.Copy(buffer, resp.Reader)
+        return err</span>
+}
+
+// PullImage pulls a Docker image with the given name.
+func PullImage(ctx context.Context, name string) error <span class="cov8" title="1">{
+        if len(name) == 0 </span><span class="cov8" title="1">{
+                return errEmptyImageName
+        }</span>
+        <span class="cov8" title="1">c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.pullImage(ctx, name)</span>
+}
+
+// CreateContainer creates a new Docker container and returns its id.
+func CreateContainer(ctx context.Context, image string, options *Options) (string, error) <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.createContainer(ctx, image, options)</span>
+}
+
+// StartContainer starts Docker container.
+func StartContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.startContainer(ctx, id)</span>
+}
+
+// CreateStartContainer creates a new Docker container and starts it. Returns created container id.
+func CreateStartContainer(ctx context.Context, image string, options *Options) (string, error) <span class="cov0" title="0">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return "", err
+        }</span>
+        <span class="cov0" title="0">defer c.close()
+        return c.createStartContainer(ctx, image, options)</span>
+}
+
+// fetchContainerData fetches Docker container data and saves in into container object.
+func fetchContainerData(ctx context.Context, container *container) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.fetchContainerData(ctx, container)</span>
+}
+
+// StopContainer stops Docker container.
+func StopContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.stopContainer(ctx, id)</span>
+}
+
+// RemoveContainer removes Docker container.
+func RemoveContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.stopContainer(ctx, id)</span>
+}
+
+// StopRemoveContainer stops and removes Docker container.
+func StopRemoveContainer(ctx context.Context, id string) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.stopRemoveContainer(ctx, id)</span>
+}
+
+// ExecCommand executes given shell command in Docker container.
+func ExecCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error <span class="cov8" title="1">{
+        c, err := getClient()
+        if err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+        <span class="cov8" title="1">defer c.close()
+        return c.execCommand(ctx, id, command, buffer)</span>
+}
+</pre>
+		
+		<pre class="file" id="file1" style="display: none">package docker
+
+import (
+        "bytes"
+        "context"
+        "strings"
+        "time"
+
+        "github.com/docker/docker/api/types"
+        "github.com/pkg/errors"
+)
+
+const (
+        containerStateRunning        = "running"
+        defaultContainerStartTimeout = 60
+)
+
+// Container defines container methods.
+type Container interface {
+        Create(ctx context.Context) error
+        Start(ctx context.Context) error
+        CreateStart(ctx context.Context) error
+        Stop(ctx context.Context) error
+        Remove(ctx context.Context) error
+        StopRemove(ctx context.Context) error
+        HasStarted(ctx context.Context) (bool, error)
+        Exec(ctx context.Context, command string, buffer *bytes.Buffer) error
+}
+
+// container holds container data. Implements Container interface.
+type container struct {
+        id, image, state, status string
+        options                  Options
+}
+
+// Options holds container optional attributes values which can be set on new container object creation.
+type Options struct {
+        Name, Healthcheck                  string
+        EnvironmentVariables, ExposedPorts []string
+        StartTimeout                       int
+}
+
+var (
+        errEmptyContainerNameAndID = errors.New("empty container name and id")
+        errEmptyImageName          = errors.New("empty image name")
+        errContainerNotFound       = errors.New("container not found")
+        errContainerStartTimeout   = errors.New("container start timeout")
+        errIncorrectPortConfig     = errors.New(`incorrect port configuration, expected format is: "containerPort:hostPort"`)
+)
+
+// Create creates a new Docker container and saves its id to the container object.
+func (c *container) Create(ctx context.Context) error <span class="cov8" title="1">{
+        if err = PullImage(ctx, c.image); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">c.id, err = CreateContainer(ctx, c.image, &amp;c.options)
+        return err</span>
+}
+
+// Start starts Docker container and waits until it is in `running` state. In case healthcheck is defined for the container,
+// also waits for service inside the container to finish starting.
+func (c *container) Start(ctx context.Context) error <span class="cov8" title="1">{
+        var started bool
+        started, err = c.HasStarted(ctx)
+        if err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span> else<span class="cov8" title="1"> if started </span><span class="cov8" title="1">{
+                return nil
+        }</span>
+
+        <span class="cov8" title="1">if err = StartContainer(ctx, c.id); err != nil </span><span class="cov0" title="0">{
+                return err
+        }</span>
+
+        <span class="cov8" title="1">t := 0
+        for t &lt; c.options.StartTimeout </span><span class="cov8" title="1">{
+                if started, _ = c.HasStarted(ctx); started </span><span class="cov8" title="1">{
+                        break</span>
+                }
+                <span class="cov8" title="1">time.Sleep(time.Second * 1)
+                t++</span>
+        }
+        <span class="cov8" title="1">if !started </span><span class="cov0" title="0">{
+                return errContainerStartTimeout
+        }</span>
+
+        <span class="cov8" title="1">return nil</span>
+}
+
+// CreateStart creates a new Docker container and starts it.
+func (c *container) CreateStart(ctx context.Context) error <span class="cov8" title="1">{
+        if err = c.Create(ctx); err != nil </span><span class="cov8" title="1">{
+                return err
+        }</span>
+        <span class="cov8" title="1">return c.Start(ctx)</span>
+}
+
+// fetchData fetches Docker container data and stores it in the container object.
+func (c *container) fetchData(ctx context.Context) error <span class="cov8" title="1">{
+        return fetchContainerData(ctx, c)
+}</span>
+
+// Stop stops Docker container.
+func (c *container) Stop(ctx context.Context) error <span class="cov8" title="1">{
+        if len(c.id) == 0 </span><span class="cov8" title="1">{
+                if err = c.fetchData(ctx); err != nil </span><span class="cov8" title="1">{
+                        return err
+                }</span>
+        }
+        <span class="cov8" title="1">return StopContainer(ctx, c.id)</span>
+}
+
+// Remove removes Docker container.
+func (c *container) Remove(ctx context.Context) error <span class="cov8" title="1">{
+        // fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
+        // In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
+        err = c.fetchData(ctx)
+        switch err </span>{
+        case errContainerNotFound:<span class="cov8" title="1">
+                return nil</span>
+        case nil:<span class="cov8" title="1">
+                return RemoveContainer(ctx, c.id)</span>
+        }
+        <span class="cov8" title="1">return err</span>
+}
+
+// StopRemove stops Docker container and removes it.
+func (c *container) StopRemove(ctx context.Context) error <span class="cov8" title="1">{
+        // fetchData is called in any case, even if container id is non-empty, because fetchData can return errContainerNotFound.
+        // In this way, we avoid returning this error to the caller and allow him to proceed the program normal flow execution.
+        err = c.fetchData(ctx)
+        switch err </span>{
+        case errContainerNotFound:<span class="cov8" title="1">
+                return nil</span>
+        case nil:<span class="cov8" title="1">
+                return StopRemoveContainer(ctx, c.id)</span>
+        }
+        <span class="cov8" title="1">return err</span>
+}
+
+// HasStarted returns container state and healthiness check status. Can be used to check whether both, a container
+// and a service inside it have started.
+// Container is considered as started if its state is 'running' and not 'health: starting'.
+func (c *container) HasStarted(ctx context.Context) (bool, error) <span class="cov8" title="1">{
+        if err = c.fetchData(ctx); err != nil </span><span class="cov8" title="1">{
+                return false, err
+        }</span>
+        <span class="cov8" title="1">return c.state == containerStateRunning &amp;&amp; !strings.Contains(c.status, "health: "+types.Starting), nil</span>
+}
+
+// Exec executes shell command in container.
+func (c *container) Exec(ctx context.Context, command string, buffer *bytes.Buffer) error <span class="cov8" title="1">{
+        return ExecCommand(ctx, c.id, command, buffer)
+}</span>
+
+// NewContainer creates a new [Container] object.
+func NewContainer(image string) Container <span class="cov0" title="0">{
+        return NewContainerWithOptions(image, Options{})
+}</span>
+
+// NewContainerWithOptions creates a new [Container] object with optional attributes values specified.
+func NewContainerWithOptions(image string, options Options) Container <span class="cov8" title="1">{
+        if options.StartTimeout == 0 </span><span class="cov8" title="1">{
+                options.StartTimeout = defaultContainerStartTimeout
+        }</span>
+        <span class="cov8" title="1">return &amp;container{image: image, options: options}</span>
+}
+</pre>
+		
+		<pre class="file" id="file2" style="display: none">package docker
+
+import (
+        "bytes"
+        "context"
+)
+
+// DatabaseContainer extends [Container] interface with database interaction methods.
+type DatabaseContainer interface {
+        Container
+        ResetDatabase(ctx context.Context) error
+}
+
+// Database holds database metadata.
+type Database struct {
+        Name         string
+        ResetCommand string
+}
+
+// databaseContainer holds container and inner database metadata. Implements [DatabaseContainer] interface.
+type databaseContainer struct {
+        container
+        database Database
+}
+
+// ResetDatabase executes database reset command in container.
+func (dc *databaseContainer) ResetDatabase(ctx context.Context) error <span class="cov8" title="1">{
+        buffer := bytes.Buffer{}
+        return dc.Exec(ctx, dc.database.ResetCommand, &amp;buffer)
+}</span>
+
+// NewDatabaseContainer creates a new [DatabaseContainer] object.
+func NewDatabaseContainer(image string, db Database) DatabaseContainer <span class="cov0" title="0">{
+        return NewDatabaseContainerWithOptions(image, db, Options{})
+}</span>
+
+// NewDatabaseContainerWithOptions creates a new [DatabaseContainer] object with optional attributes values specified.
+func NewDatabaseContainerWithOptions(image string, db Database, options Options) DatabaseContainer <span class="cov8" title="1">{
+        if options.StartTimeout == 0 </span><span class="cov8" title="1">{
+                options.StartTimeout = defaultContainerStartTimeout
+        }</span>
+        <span class="cov8" title="1">dbContainer := databaseContainer{database: db}
+        dbContainer.image = image
+        dbContainer.options = options
+        return &amp;dbContainer</span>
+}
+</pre>
+		
+		<pre class="file" id="file3" style="display: none">package presets
+
+import "github.com/ygrebnov/testutils/docker"
+
+type databaseContainerPreset = preset[docker.DatabaseContainer]
+
+type defaultDatabaseContainerPreset struct {
+        defaultContainerPreset `yaml:",inline"`
+        Database               presetDatabase `yaml:"database"`
+}
+
+// presetDatabase holds database preset inner database data.
+type presetDatabase struct {
+        Name         string `yaml:"name"`
+        ResetCommand string `yaml:"reset_command"`
+}
+
+// asContainer returns a [docker.Container] object with preset attribute values.
+// nolint: unused
+func (p *defaultDatabaseContainerPreset) asContainer() docker.DatabaseContainer <span class="cov8" title="1">{
+        return docker.NewDatabaseContainerWithOptions(p.Image.Name, p.getPresetDatabase(), p.getPresetContainerOptions())
+}</span>
+
+// asCustomizedContainer returns a [docker.Container] with preset attribute values overwritten by customized ones.
+// nolint: unused
+func (p *defaultDatabaseContainerPreset) asCustomizedContainer(options docker.Options) docker.DatabaseContainer <span class="cov8" title="1">{
+        return docker.NewDatabaseContainerWithOptions(p.Image.Name, p.getPresetDatabase(), p.combineContainerOptions(options))
+}</span>
+
+// nolint: unused
+func (p *defaultDatabaseContainerPreset) getPresetDatabase() docker.Database <span class="cov8" title="1">{
+        return docker.Database{Name: p.Database.Name, ResetCommand: p.Database.ResetCommand}
+}</span>
+
+// newDatabaseContainerPreset creates a new `databaseContainerPreset` object.
+func newDatabaseContainerPreset(valuesFile string) databaseContainerPreset <span class="cov8" title="1">{
+        p := new(defaultDatabaseContainerPreset)
+        parsePresetValues(valuesFile, p)
+        return p
+}</span>
+</pre>
+		
+		<pre class="file" id="file4" style="display: none">package presets
+
+import "github.com/ygrebnov/testutils/docker"
+
+var postgresqlPreset = newDatabaseContainerPreset("postgresql.yaml")
+
+// NewCustomizedPostgresqlContainer returns a preset [github.com/ygrebnov/testutils/docker.DatabaseContainer] object with
+// customized options values.
+func NewCustomizedPostgresqlContainer(options docker.Options) docker.DatabaseContainer <span class="cov8" title="1">{
+        return postgresqlPreset.asCustomizedContainer(options)
+}</span>
+
+// NewPostgresqlContainer returns a preset [github.com/ygrebnov/testutils/docker.DatabaseContainer] object.
+func NewPostgresqlContainer() docker.DatabaseContainer <span class="cov8" title="1">{
+        return postgresqlPreset.asContainer()
+}</span>
+</pre>
+		
+		<pre class="file" id="file5" style="display: none">// Package presets contains a collection of preset [github.com/ygrebnov/testutils/docker.Container] objects.
+package presets // import "github.com/ygrebnov/testutils/presets"
+
+import (
+        "fmt"
+        "os"
+        "path/filepath"
+        "runtime"
+        "strconv"
+
+        "github.com/pkg/errors"
+        "gopkg.in/yaml.v3"
+
+        "github.com/ygrebnov/testutils/docker"
+)
+
+// preset represents a type capable of producing preset and customizable [docker.Container] objects.
+type preset[T any] interface {
+        asContainer() T
+        asCustomizedContainer(options docker.Options) T
+}
+
+// nolint: unused
+type containerPreset = preset[docker.Container]
+
+// defaultContainerPreset is a default implementation of `preset` interface.
+// defaultContainerPreset holds container and image data.
+type defaultContainerPreset struct {
+        Container presetContainer `yaml:"container"`
+        Image     presetImage     `yaml:"image"`
+}
+
+// presetContainer holds preset container data.
+type presetContainer struct {
+        Name        string               `yaml:"name"`
+        Env         []presetContainerEnv `yaml:"env,omitempty"`
+        Ports       []string             `yaml:"ports,omitempty"`
+        Healthcheck string               `yaml:"healthcheck"`
+}
+
+// presetContainerEnv holds preset container environment variables data.
+type presetContainerEnv struct {
+        Name  string `yaml:"name"`
+        Value any    `yaml:"value"`
+}
+
+// presetImage holds preset container image data.
+type presetImage struct {
+        Name string `yaml:"name"`
+}
+
+// newContainerPreset creates a new `containerPreset` object.
+// nolint: unused
+func newContainerPreset(valuesFile string) containerPreset <span class="cov0" title="0">{
+        p := new(defaultContainerPreset)
+        parsePresetValues(valuesFile, p)
+        return p
+}</span>
+
+// parsePresetValues sets given `preset` object attributes with values from the given yaml file.
+func parsePresetValues(valuesFile string, preset any) <span class="cov8" title="1">{
+        _, currFile, _, ok := runtime.Caller(0)
+        if !ok </span><span class="cov0" title="0">{
+                panic(errors.New("cannot locate preset values file"))</span>
+        }
+        <span class="cov8" title="1">valuesFilePath := filepath.Join(filepath.Dir(currFile), valuesFile)
+        valuesData, err := os.ReadFile(valuesFilePath)
+        if err != nil </span><span class="cov0" title="0">{
+                panic(err)</span>
+        }
+        <span class="cov8" title="1">if err := yaml.Unmarshal(valuesData, preset); err != nil </span><span class="cov0" title="0">{
+                panic(err)</span>
+        }
+}
+
+// asContainer returns a [docker.Container] object with preset attribute values.
+// nolint: unused
+func (p *defaultContainerPreset) asContainer() docker.Container <span class="cov0" title="0">{
+        return docker.NewContainerWithOptions(p.Image.Name, p.getPresetContainerOptions())
+}</span>
+
+// asCustomizedContainer returns a [docker.Container] with preset attribute values overwritten by customized ones.
+// nolint: unused
+func (p *defaultContainerPreset) asCustomizedContainer(options docker.Options) docker.Container <span class="cov0" title="0">{
+        return docker.NewContainerWithOptions(p.Image.Name, p.combineContainerOptions(options))
+}</span>
+
+// getPresetContainerOptions returns a [docker.Options] object with attributes values from preset yaml file.
+// nolint: unused
+func (p *defaultContainerPreset) getPresetContainerOptions() docker.Options <span class="cov8" title="1">{
+        env := make([]string, 0, len(p.Container.Env))
+        for _, el := range p.Container.Env </span><span class="cov8" title="1">{
+                var stringVal string
+                switch typedVal := el.Value.(type) </span>{
+                case int:<span class="cov8" title="1">
+                        stringVal = strconv.Itoa(typedVal)</span>
+                case string:<span class="cov8" title="1">
+                        stringVal = typedVal</span>
+                default:<span class="cov0" title="0">
+                        panic(errors.New("unhandled preset.env value type"))</span>
+                }
+                <span class="cov8" title="1">env = append(env, fmt.Sprintf("%s=%s", el.Name, stringVal))</span>
+        }
+        <span class="cov8" title="1">return docker.Options{
+                Name:                 p.Container.Name,
+                Healthcheck:          p.Container.Healthcheck,
+                EnvironmentVariables: env,
+                ExposedPorts:         p.Container.Ports,
+        }</span>
+}
+
+// nolint: unused
+func (p *defaultContainerPreset) combineContainerOptions(options docker.Options) docker.Options <span class="cov8" title="1">{
+        combinedOptions := p.getPresetContainerOptions()
+        if len(options.Name) &gt; 0 </span><span class="cov8" title="1">{
+                combinedOptions.Name = options.Name
+        }</span>
+        <span class="cov8" title="1">if len(options.EnvironmentVariables) &gt; 0 </span><span class="cov0" title="0">{
+                combinedOptions.EnvironmentVariables = options.EnvironmentVariables
+        }</span>
+        <span class="cov8" title="1">if len(options.ExposedPorts) &gt; 0 </span><span class="cov0" title="0">{
+                combinedOptions.ExposedPorts = options.ExposedPorts
+        }</span>
+        <span class="cov8" title="1">if len(options.Healthcheck) &gt; 0 </span><span class="cov0" title="0">{
+                combinedOptions.Healthcheck = options.Healthcheck
+        }</span>
+        <span class="cov8" title="1">if options.StartTimeout &gt; 0 </span><span class="cov0" title="0">{
+                combinedOptions.StartTimeout = options.StartTimeout
+        }</span>
+        <span class="cov8" title="1">return combinedOptions</span>
+}
+</pre>
+		
+		</div>
+	</body>
+	<script>
+	(function() {
+		var files = document.getElementById('files');
+		var visible;
+		files.addEventListener('change', onChange, false);
+		function select(part) {
+			if (visible)
+				visible.style.display = 'none';
+			visible = document.getElementById(part);
+			if (!visible)
+				return;
+			files.value = part;
+			visible.style.display = 'block';
+			location.hash = part;
+		}
+		function onChange() {
+			select(files.value);
+			window.scrollTo(0, 0);
+		}
+		if (location.hash != "") {
+			select(location.hash.substr(1));
+		}
+		if (!visible) {
+			select("file0");
+		}
+	})();
+	</script>
+</html>

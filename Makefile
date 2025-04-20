@@ -6,13 +6,13 @@ COVERAGE_PATH := $(ROOT_PATH).coverage
 lint:
 	@golangci-lint run
 
-test-unit:
+test:
 	@rm -rf $(COVERAGE_PATH)
 	@mkdir -p $(COVERAGE_PATH)
-	@go test -v -coverpkg=./internal ./internal -coverprofile $(COVERAGE_PATH)/cp.out
+	@go test -v -coverpkg=./... ./... -coverprofile $(COVERAGE_PATH)/cp.out
 	@go tool cover -func=$(COVERAGE_PATH)/cp.out -o $(COVERAGE_PATH)/coverage.txt
 	@go tool cover -html=$(COVERAGE_PATH)/cp.out -o $(COVERAGE_PATH)/coverage.html
 
-all: lint test-unit
+all: lint test
 
-.PHONY: lint test-unit all
+.PHONY: lint test all
