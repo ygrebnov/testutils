@@ -11,7 +11,7 @@ import (
 
 	dockerContainer "github.com/docker/docker/api/types/container"
 	dockerContainerFilters "github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/image"
+	dockerImage "github.com/docker/docker/api/types/image"
 	dockerClient "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -32,24 +32,18 @@ type client interface {
 
 // defaultClient holds Docker client handler. Implements client interface.
 type defaultClient struct {
-	handler dockerClient.CommonAPIClient
+	handler dockerClient.APIClient
 }
 
 var (
-	// cli points to a client
 	cli client
-	err error
-	ok  bool
 	// newClientFn is used to simplify testability of newClient function.
-	newClientFn func(ops ...dockerClient.Opt) (*dockerClient.Client, error) = dockerClient.NewClientWithOpts
+	newClientFn = dockerClient.NewClientWithOpts
 )
 
 // newClient creates a new client object with a new Docker client handler.
-// client is stored in a package private 'cli' variable.
 func newClient() (client, error) {
-	var c *dockerClient.Client
-
-	c, err = newClientFn(
+	c, err := newClientFn(
 		dockerClient.FromEnv,
 		dockerClient.WithAPIVersionNegotiation(),
 	)
@@ -71,37 +65,41 @@ func getClient() (client, error) {
 
 // close calls Docker client Close method.
 func (c *defaultClient) close() {
-	c.handler.Close()
+	_ = c.handler.Close() // TODO: handle error
 }
 
 // pullImage calls Docker client ImagePull method. Ignores method execution output.
 func (c *defaultClient) pullImage(ctx context.Context, name string) error {
-	var reader io.ReadCloser
-	if reader, err = c.handler.ImagePull(ctx, name, image.PullOptions{}); err != nil {
+	reader, err := c.handler.ImagePull(ctx, name, dockerImage.PullOptions{})
+	if err != nil {
 		return err
 	}
-	defer reader.Close()
-	io.ReadAll(reader) // nolint: errcheck
-	return nil
+
+	defer func() {
+		err = reader.Close()
+	}()
+	_, err = io.ReadAll(reader)
+
+	return err
 }
 
 // createContainer creates a new Docker container and returns its id.
 func (c *defaultClient) createContainer(ctx context.Context, image string, options *Options) (string, error) {
 	var (
-		hostPortString, containerPortString string
-		healthcheck                         dockerContainer.HealthConfig
+		healthcheck dockerContainer.HealthConfig
 	)
 	exposedPorts := make(nat.PortSet, len(options.ExposedPorts))
 	portBindings := make(nat.PortMap, len(options.ExposedPorts))
 	for _, port := range options.ExposedPorts {
-		if hostPortString, containerPortString, ok = strings.Cut(port, ":"); !ok {
+		hostPortString, containerPortString, ok := strings.Cut(port, ":")
+		if !ok {
 			return "", errIncorrectPortConfig
 		}
 		containerPort := nat.Port(containerPortString + "/tcp")
 		exposedPorts[containerPort] = struct{}{}
 		portBindings[containerPort] = []nat.PortBinding{{HostIP: "0.0.0.0", HostPort: hostPortString}}
 	}
-	if len(options.Healthcheck) > 0 {
+	if options.Healthcheck != "" {
 		healthcheck.Test = strings.Split("CMD-SHELL "+options.Healthcheck, " ")
 		healthcheck.Retries = 29
 		healthcheck.StartPeriod = time.Second * 2
@@ -150,9 +148,9 @@ func (c *defaultClient) fetchContainerData(ctx context.Context, container *conta
 	filters := dockerContainerFilters.NewArgs()
 
 	switch {
-	case len(container.options.Name) > 0:
+	case container.options.Name != "":
 		filters.Add("name", "/"+container.options.Name)
-	case len(container.id) > 0:
+	case container.id != "":
 		filters.Add("id", container.id)
 	default:
 		return errEmptyContainerNameAndID
@@ -190,7 +188,7 @@ func (c *defaultClient) stopRemoveContainer(ctx context.Context, id string) erro
 }
 
 // execCommand executes shell command in Docker container.
-func (c *defaultClient) execCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error {
+func (c *defaultClient) execCommand(ctx context.Context, id, command string, buffer *bytes.Buffer) error {
 	r, err := c.handler.ContainerExecCreate(ctx, id, dockerContainer.ExecOptions{
 		Cmd:          []string{"bash", "-c", command},
 		AttachStderr: true,
@@ -211,7 +209,7 @@ func (c *defaultClient) execCommand(ctx context.Context, id string, command stri
 
 // PullImage pulls a Docker image with the given name.
 func PullImage(ctx context.Context, name string) error {
-	if len(name) == 0 {
+	if name == "" {
 		return errEmptyImageName
 	}
 	c, err := getClient()
@@ -293,7 +291,7 @@ func StopRemoveContainer(ctx context.Context, id string) error {
 }
 
 // ExecCommand executes given shell command in Docker container.
-func ExecCommand(ctx context.Context, id string, command string, buffer *bytes.Buffer) error {
+func ExecCommand(ctx context.Context, id, command string, buffer *bytes.Buffer) error {
 	c, err := getClient()
 	if err != nil {
 		return err
