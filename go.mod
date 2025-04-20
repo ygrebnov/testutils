@@ -1,6 +1,6 @@
 module github.com/ygrebnov/testutils
 
-go 1.19
+go 1.24
 
 require (
 	github.com/docker/docker v23.0.1+incompatible
