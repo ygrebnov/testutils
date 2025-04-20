@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	dockerContainer "github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
 	dockerClient "github.com/docker/docker/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -24,7 +25,7 @@ type mockedDockerClient struct {
 func (mdc *mockedDockerClient) ImagePull(
 	_ context.Context,
 	_ string,
-	_ types.ImagePullOptions,
+	_ image.PullOptions,
 ) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), mockedImagePullError
 }
@@ -45,7 +46,7 @@ func (mdc *mockedDockerClient) ContainerCreate(
 func (mdc *mockedDockerClient) ContainerStart(
 	_ context.Context,
 	_ string,
-	_ types.ContainerStartOptions,
+	_ dockerContainer.StartOptions,
 ) error {
 	return nil
 }
@@ -53,7 +54,7 @@ func (mdc *mockedDockerClient) ContainerStart(
 // ContainerList is a mocked [dockerClient.Client] type method.
 func (mdc *mockedDockerClient) ContainerList(
 	_ context.Context,
-	_ types.ContainerListOptions,
+	_ dockerContainer.ListOptions,
 ) ([]types.Container, error) {
 	return mockedContainerListValues.next()
 }
@@ -71,7 +72,7 @@ func (mdc *mockedDockerClient) ContainerStop(
 func (mdc *mockedDockerClient) ContainerRemove(
 	_ context.Context,
 	_ string,
-	_ types.ContainerRemoveOptions,
+	_ dockerContainer.RemoveOptions,
 ) error {
 	return nil
 }
