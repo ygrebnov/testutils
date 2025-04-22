@@ -86,12 +86,12 @@ import (
 
 func Test_SomeFunction(t *testing.T) {
     ctx := context.Background()
-	options := docker.Options{
+	options := &docker.Options{
 		Name: "test-container",
 		EnvironmentVariables: []string{"MYVAR=my-var-value"}, 
 		ExposedPorts: []string{"8080:80"},
 	}
-    containerID, err := docker.CreateStartContainer(ctx, "image/name", &options)
+    containerID, err := docker.CreateStartContainer(ctx, "image/name", options)
     require.NoError(t, err)
     defer func() { require.NoError(t, docker.StopRemoveContainer(ctx, containerID)) }()
 
@@ -166,7 +166,7 @@ import (
 
 func Test_SomeFunction(t *testing.T) {
 	ctx := context.Background()
-	options := docker.Options{
+	options := &docker.Options{
 		Name: "test-container",
 		EnvironmentVariables: []string{"MYVAR=my-var-value"},
 		ExposedPorts: []string{"8080:80"},
@@ -231,7 +231,7 @@ import (
 
 func Test_SomeFunction(t *testing.T) {
 	ctx := context.Background()
-	options := docker.Options{ExposedPorts: []string{"5433:5432"}} // container port 5432 is bound to the host 5433 port, other configuration remains unchanged
+	options := &docker.Options{ExposedPorts: []string{"5433:5432"}} // container port 5432 is bound to the host 5433 port, other configuration remains unchanged
 	testContainer := presets.NewCustomizedPostgresqlContainer(options)
 	require.NoError(t, testContainer.CreateStart(ctx)) // creates and starts a new PostgreSQL Docker container on host
 	defer func() { require.NoError(t, testContainer.StopRemove(ctx)) }() // stops and removes PostgreSQL Docker container at the end of the test
