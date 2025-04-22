@@ -35,15 +35,11 @@ type defaultClient struct {
 	handler dockerClient.APIClient
 }
 
-var (
-	cli client
-	// newClientFn is used to simplify testability of newClient function.
-	newClientFn = dockerClient.NewClientWithOpts
-)
+var cli client
 
 // newClient creates a new client object with a new Docker client handler.
-func newClient() (client, error) {
-	c, err := newClientFn(
+func newClient(deps injectables) (client, error) {
+	c, err := deps.getNewClientFn()(
 		dockerClient.FromEnv,
 		dockerClient.WithAPIVersionNegotiation(),
 	)
@@ -52,15 +48,17 @@ func newClient() (client, error) {
 	}
 
 	cli = &defaultClient{handler: c}
+
 	return cli, nil
 }
 
 // getClient returns a pointer to client, stored in 'cli' variable or a newly created one.
-func getClient() (client, error) {
+func getClient(deps injectables) (client, error) {
+	// TODO: use sync.Once.
 	if cli != nil {
 		return cli, nil
 	}
-	return newClient()
+	return newClient(deps)
 }
 
 // close calls Docker client Close method.
@@ -85,9 +83,14 @@ func (c *defaultClient) pullImage(ctx context.Context, name string) error {
 
 // createContainer creates a new Docker container and returns its id.
 func (c *defaultClient) createContainer(ctx context.Context, image string, options *Options) (string, error) {
+	if options == nil {
+		options = &Options{}
+	}
+
 	var (
 		healthcheck dockerContainer.HealthConfig
 	)
+
 	exposedPorts := make(nat.PortSet, len(options.ExposedPorts))
 	portBindings := make(nat.PortMap, len(options.ExposedPorts))
 	for _, port := range options.ExposedPorts {
@@ -146,10 +149,11 @@ func (c *defaultClient) createStartContainer(ctx context.Context, image string, 
 // Container object must have either non-empty name or id field value.
 func (c *defaultClient) fetchContainerData(ctx context.Context, container *container) error {
 	filters := dockerContainerFilters.NewArgs()
+	containerName := container.getName()
 
 	switch {
-	case container.options.Name != "":
-		filters.Add("name", "/"+container.options.Name)
+	case containerName != "":
+		filters.Add("name", "/"+containerName)
 	case container.id != "":
 		filters.Add("id", container.id)
 	default:
@@ -212,7 +216,7 @@ func PullImage(ctx context.Context, name string) error {
 	if name == "" {
 		return errEmptyImageName
 	}
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -222,7 +226,7 @@ func PullImage(ctx context.Context, name string) error {
 
 // CreateContainer creates a new Docker container and returns its id.
 func CreateContainer(ctx context.Context, image string, options *Options) (string, error) {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return "", err
 	}
@@ -232,7 +236,7 @@ func CreateContainer(ctx context.Context, image string, options *Options) (strin
 
 // StartContainer starts Docker container.
 func StartContainer(ctx context.Context, id string) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -242,7 +246,7 @@ func StartContainer(ctx context.Context, id string) error {
 
 // CreateStartContainer creates a new Docker container and starts it. Returns created container id.
 func CreateStartContainer(ctx context.Context, image string, options *Options) (string, error) {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return "", err
 	}
@@ -252,7 +256,7 @@ func CreateStartContainer(ctx context.Context, image string, options *Options) (
 
 // fetchContainerData fetches Docker container data and saves in into container object.
 func fetchContainerData(ctx context.Context, container *container) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -262,7 +266,7 @@ func fetchContainerData(ctx context.Context, container *container) error {
 
 // StopContainer stops Docker container.
 func StopContainer(ctx context.Context, id string) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -272,7 +276,7 @@ func StopContainer(ctx context.Context, id string) error {
 
 // RemoveContainer removes Docker container.
 func RemoveContainer(ctx context.Context, id string) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -282,7 +286,7 @@ func RemoveContainer(ctx context.Context, id string) error {
 
 // StopRemoveContainer stops and removes Docker container.
 func StopRemoveContainer(ctx context.Context, id string) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}
@@ -292,7 +296,7 @@ func StopRemoveContainer(ctx context.Context, id string) error {
 
 // ExecCommand executes given shell command in Docker container.
 func ExecCommand(ctx context.Context, id, command string, buffer *bytes.Buffer) error {
-	c, err := getClient()
+	c, err := getClient(injectables{})
 	if err != nil {
 		return err
 	}

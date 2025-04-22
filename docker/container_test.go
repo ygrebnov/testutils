@@ -88,7 +88,6 @@ type containerListMockValue struct {
 }
 
 // containerListMockValues contains a slice of mocked [dockerClient.Client.ContainerList] method return values.
-// containerListMockValues is capable of iteratively returning values from the list.
 type containerListMockValues struct {
 	values []containerListMockValue
 	size   int
@@ -141,7 +140,7 @@ func (mc *mockedContainer) asContainer() *container {
 		image:  mc.image,
 		state:  mc.state,
 		status: mc.status,
-		options: Options{
+		options: &Options{
 			Name:         mc.name,
 			StartTimeout: 60,
 		},
@@ -276,7 +275,7 @@ func Test_container(t *testing.T) {
 			}
 			c := NewContainerWithOptions(
 				test.containerData.image,
-				Options{Name: test.containerData.name},
+				&Options{Name: test.containerData.name},
 			)
 			require.ErrorIs(t, test.function(c, context.Background()), test.expectedError)
 			if test.expectedError == nil {

@@ -15,20 +15,21 @@ var (
 )
 
 func Test_NewClient(t *testing.T) {
-	// newClientFn points to a function returning a mocked Docker client and error.
-	newClientFn = func(...dockerClient.Opt) (*dockerClient.Client, error) {
-		return &mockedClient, errNewClient
-	}
-
 	tests := []struct {
-		name string
-		// setupMocks is a hook used to dynamically inject mocks' values, which are specific for a test scenario.
+		name          string
 		setupMocks    func()
 		expectedError error
 		expectedCli   client
 	}{
-		{"nominal", nil, nil, &defaultClient{handler: &mockedClient}},
-		{"error", func() { errNewClient = errNewClientMock }, errNewClientMock, nil},
+		{
+			name:        "nominal",
+			expectedCli: &defaultClient{handler: &mockedClient},
+		},
+		{
+			name:          "error",
+			setupMocks:    func() { errNewClient = errNewClientMock },
+			expectedError: errNewClientMock,
+		},
 	}
 
 	for _, test := range tests {
@@ -37,7 +38,13 @@ func Test_NewClient(t *testing.T) {
 			if test.setupMocks != nil {
 				test.setupMocks()
 			}
-			c, err := getClient()
+			c, err := getClient(
+				injectables{
+					newClientFn: func(...dockerClient.Opt) (*dockerClient.Client, error) {
+						return &mockedClient, errNewClient
+					},
+				},
+			)
 			require.ErrorIs(t, err, test.expectedError)
 			require.Equal(t, test.expectedCli, c)
 		})

@@ -30,7 +30,16 @@ type Container interface {
 // container holds container data. Implements Container interface.
 type container struct {
 	id, image, state, status string
-	options                  Options
+	options                  *Options
+}
+
+// getName returns container name.
+func (c *container) getName() string {
+	if c.options == nil || c.options.Name == "" {
+		return ""
+	}
+
+	return c.options.Name
 }
 
 // Options holds container optional attributes values which can be set on new container object creation.
@@ -54,7 +63,9 @@ func (c *container) Create(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.id, err = CreateContainer(ctx, c.image, &c.options)
+
+	c.id, err = CreateContainer(ctx, c.image, c.options)
+
 	return err
 }
 
@@ -69,7 +80,7 @@ func (c *container) Start(ctx context.Context) error {
 		return nil
 	}
 
-	if err = StartContainer(ctx, c.id); err != nil {
+	if err := StartContainer(ctx, c.id); err != nil {
 		return err
 	}
 
@@ -160,12 +171,12 @@ func (c *container) Exec(ctx context.Context, command string, buffer *bytes.Buff
 
 // NewContainer creates a new [Container] object.
 func NewContainer(image string) Container {
-	return NewContainerWithOptions(image, Options{})
+	return NewContainerWithOptions(image, nil)
 }
 
 // NewContainerWithOptions creates a new [Container] object with optional attributes values specified.
-func NewContainerWithOptions(image string, options Options) Container {
-	if options.StartTimeout == 0 {
+func NewContainerWithOptions(image string, options *Options) Container {
+	if options != nil && options.StartTimeout == 0 {
 		options.StartTimeout = defaultContainerStartTimeout
 	}
 	return &container{image: image, options: options}

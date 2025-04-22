@@ -63,7 +63,7 @@ linters:
     gocyclo:
       min-complexity: 10
     godot:
-      capital: false
+      capital: true
     govet:
       enable:
         - shadow

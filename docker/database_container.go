@@ -31,16 +31,20 @@ func (dc *databaseContainer) ResetDatabase(ctx context.Context) error {
 
 // NewDatabaseContainer creates a new [DatabaseContainer] object.
 func NewDatabaseContainer(image string, db Database) DatabaseContainer {
-	return NewDatabaseContainerWithOptions(image, db, Options{})
+	return NewDatabaseContainerWithOptions(image, db, nil)
 }
 
 // NewDatabaseContainerWithOptions creates a new [DatabaseContainer] object with optional attributes values specified.
-func NewDatabaseContainerWithOptions(image string, db Database, options Options) DatabaseContainer {
-	if options.StartTimeout == 0 {
+func NewDatabaseContainerWithOptions(image string, db Database, options *Options) DatabaseContainer {
+	if options != nil && options.StartTimeout == 0 {
 		options.StartTimeout = defaultContainerStartTimeout
 	}
-	dbContainer := databaseContainer{database: db}
-	dbContainer.image = image
-	dbContainer.options = options
-	return &dbContainer
+
+	return &databaseContainer{
+		database: db,
+		container: container{
+			image:   image,
+			options: options,
+		},
+	}
 }
