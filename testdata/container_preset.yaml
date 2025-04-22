@@ -1,0 +1,10 @@
+container:
+  name: test-container
+  env:
+    - name: ENV_VAR
+      value: value
+  ports:
+    - 8080:80
+  healthcheck: curl -f http://localhost || exit 1
+image:
+  name: test-image
