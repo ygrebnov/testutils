@@ -3,7 +3,7 @@ module github.com/ygrebnov/testutils
 go 1.24
 
 require (
-	github.com/docker/docker v28.3.2+incompatible
+	github.com/docker/docker v28.3.3+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/opencontainers/image-spec v1.1.1
 	github.com/stretchr/testify v1.10.0
